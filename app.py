@@ -1320,7 +1320,6 @@ elif selected_menu == "Dashboard Akademik":
             "Program Studi",
             "Mahasiswa",
             "PMB",
-            "Kelulusan",
             "Kebutuhan Khusus",
             "Daerah Tertinggal",
         ]
@@ -1667,49 +1666,124 @@ elif selected_menu == "Dashboard Akademik":
     with academic_tabs[1]:
         section(
             "Mahasiswa",
-            "Ringkasan populasi mahasiswa sesuai filter akademik.",
+            (
+                "Ringkasan populasi mahasiswa, kelulusan, "
+                "program studi, jenis kelamin, dan persebaran "
+                "asal propinsi sesuai filter akademik."
+            ),
         )
 
-        cols = st.columns(5)
+        # Tahun yudisium mengikuti tahun awal periode akademik.
+        academic_start_year = int(
+            academic_period.split("/")[0]
+        )
+
+        academic_yud = df_yudisium[
+            df_yudisium["tahun_lulus"].eq(
+                academic_start_year
+            )
+        ].copy()
+
+        if selected_levels:
+            academic_yud = academic_yud[
+                academic_yud["jenjang_normal"].isin(
+                    selected_levels
+                )
+            ]
+
+        if selected_faculties:
+            academic_yud = academic_yud[
+                academic_yud["fakultas"].isin(
+                    selected_faculties
+                )
+            ]
+
+        if selected_programs:
+            academic_yud = academic_yud[
+                academic_yud["prodi"].isin(
+                    selected_programs
+                )
+            ]
+
+        graduate_count = academic_yud[
+            "nim"
+        ].nunique()
+
+        on_time_count = academic_yud.loc[
+            academic_yud["tepat_waktu_bool"],
+            "nim",
+        ].nunique()
+
+        on_time_ipk_count = academic_yud.loc[
+            academic_yud["tepat_waktu_ipk_325"],
+            "nim",
+        ].nunique()
+
+        on_time_percentage = percentage(
+            on_time_count,
+            graduate_count,
+        )
+
+        # Kartu informasi: populasi mahasiswa + seluruh kartu kelulusan.
+        cols = st.columns(6)
+
         student_values = [
-            ("👥", "Total mahasiswa", len(academic_df), ""),
+            (
+                "👥",
+                "Total mahasiswa",
+                format_number(len(academic_df)),
+                "Sesuai filter akademik",
+            ),
             (
                 "✅",
                 "Mahasiswa aktif",
-                len(academic_active),
-                "",
+                format_number(len(academic_active)),
+                "Status mahasiswa aktif",
             ),
             (
-                "🏛️",
-                "Fakultas",
-                academic_df["fakultas"].nunique(),
-                "",
+                "🎓",
+                "Jumlah lulusan",
+                format_number(graduate_count),
+                f"Yudisium {academic_start_year}",
             ),
             (
-                "📚",
-                "Program studi",
-                academic_df["jurusan"].nunique(),
-                "",
+                "⏱️",
+                "Lulus tepat waktu",
+                format_number(on_time_count),
+                f"Yudisium {academic_start_year}",
             ),
             (
-                "🌍",
-                "Propinsi asal",
-                academic_df["propinsi"].nunique(),
-                "",
+                "🏅",
+                "Tepat waktu dan IPK ≥ 3,25",
+                format_number(on_time_ipk_count),
+                f"Yudisium {academic_start_year}",
+            ),
+            (
+                "📈",
+                "Kelulusan tepat waktu",
+                format_percent(on_time_percentage),
+                f"Yudisium {academic_start_year}",
             ),
         ]
 
-        for column, (icon, label, value, note) in zip(
+        for column, item in zip(
             cols,
             student_values,
         ):
             with column:
-                kpi(
-                    icon,
-                    label,
-                    format_number(value),
-                    note,
-                )
+                kpi(*item)
+
+        # ====================================================
+        # 20 PROGRAM STUDI DENGAN MAHASISWA TERBANYAK
+        # ====================================================
+
+        section(
+            "Sebaran Mahasiswa per Program Studi",
+            (
+                "Dua puluh program studi dengan jumlah mahasiswa "
+                "terbanyak berdasarkan filter yang dipilih."
+            ),
+        )
 
         prodi_summary = (
             academic_df
@@ -1749,8 +1823,15 @@ elif selected_menu == "Dashboard Akademik":
             y="jurusan",
             orientation="h",
             text="Total_Mahasiswa",
-            title="20 Program Studi dengan Mahasiswa Terbanyak",
+            title=(
+                "20 Program Studi dengan Mahasiswa Terbanyak"
+            ),
             color_discrete_sequence=[C["primary"]],
+            hover_data={
+                "fakultas": True,
+                "jenjang_normal": True,
+                "Total_Mahasiswa": True,
+            },
         )
         figure.update_layout(
             height=620,
@@ -1759,6 +1840,12 @@ elif selected_menu == "Dashboard Akademik":
             showlegend=False,
             xaxis_title="Total Mahasiswa",
             yaxis_title=None,
+            margin=dict(
+                l=10,
+                r=35,
+                t=55,
+                b=25,
+            ),
         )
         figure.update_traces(
             textposition="outside"
@@ -1785,7 +1872,21 @@ elif selected_menu == "Dashboard Akademik":
                 },
             )
 
-        left, right = st.columns(2)
+        # ====================================================
+        # PROFIL DAN PETA ASAL PROPINSI
+        # ====================================================
+
+        section(
+            "Profil dan Persebaran Mahasiswa",
+            (
+                "Komposisi jenis kelamin dan peta sebaran "
+                "asal propinsi mahasiswa."
+            ),
+        )
+
+        left, right = st.columns(
+            [0.75, 1.45]
+        )
 
         with left:
             gender_df = (
@@ -1794,40 +1895,429 @@ elif selected_menu == "Dashboard Akademik":
                 .rename_axis("Jenis Kelamin")
                 .reset_index(name="Mahasiswa")
             )
+
             figure = px.pie(
                 gender_df,
                 names="Jenis Kelamin",
                 values="Mahasiswa",
                 hole=0.58,
-                title="Jenis Kelamin",
+                title="Komposisi Jenis Kelamin",
+                color_discrete_sequence=[
+                    C["primary"],
+                    C["orange"],
+                    C["gray"],
+                ],
             )
+            figure.update_layout(
+                height=500,
+                paper_bgcolor="white",
+                legend=dict(
+                    orientation="h",
+                    y=-0.08,
+                ),
+            )
+            figure.update_traces(
+                textinfo="label+value+percent"
+            )
+
             st.plotly_chart(
                 figure,
                 use_container_width=True,
             )
 
         with right:
-            province_df = (
+            # Titik tengah propinsi untuk peta bubble Indonesia.
+            province_coordinates = {
+                "ACEH": (4.6951, 96.7494),
+                "SUMATERA UTARA": (2.1154, 99.5451),
+                "SUMATERA BARAT": (-0.7399, 100.8000),
+                "RIAU": (0.2933, 101.7068),
+                "KEPULAUAN RIAU": (3.9457, 108.1429),
+                "JAMBI": (-1.4852, 102.4381),
+                "SUMATERA SELATAN": (-3.3194, 103.9144),
+                "KEPULAUAN BANGKA BELITUNG": (-2.7411, 106.4406),
+                "BENGKULU": (-3.5778, 102.3464),
+                "LAMPUNG": (-4.5586, 105.4068),
+                "DKI JAKARTA": (-6.2088, 106.8456),
+                "JAWA BARAT": (-6.9175, 107.6191),
+                "BANTEN": (-6.4058, 106.0640),
+                "JAWA TENGAH": (-7.1510, 110.1403),
+                "DI YOGYAKARTA": (-7.8754, 110.4262),
+                "JAWA TIMUR": (-7.5361, 112.2384),
+                "BALI": (-8.3405, 115.0920),
+                "NUSA TENGGARA BARAT": (-8.6529, 117.3616),
+                "NUSA TENGGARA TIMUR": (-8.6574, 121.0794),
+                "KALIMANTAN BARAT": (-0.2788, 111.4753),
+                "KALIMANTAN TENGAH": (-1.6815, 113.3824),
+                "KALIMANTAN SELATAN": (-3.0926, 115.2838),
+                "KALIMANTAN TIMUR": (0.5387, 116.4194),
+                "KALIMANTAN UTARA": (3.0731, 116.0414),
+                "SULAWESI UTARA": (0.6247, 123.9750),
+                "GORONTALO": (0.6999, 122.4467),
+                "SULAWESI TENGAH": (-1.4300, 121.4456),
+                "SULAWESI BARAT": (-2.8441, 119.2321),
+                "SULAWESI SELATAN": (-3.6688, 119.9741),
+                "SULAWESI TENGGARA": (-4.1449, 122.1746),
+                "MALUKU": (-3.2385, 130.1453),
+                "MALUKU UTARA": (1.5700, 127.8088),
+                "PAPUA BARAT": (-1.3361, 133.1747),
+                "PAPUA BARAT DAYA": (-1.1307, 131.2416),
+                "PAPUA": (-4.2699, 138.0804),
+                "PAPUA TENGAH": (-3.7048, 136.6798),
+                "PAPUA PEGUNUNGAN": (-4.2699, 138.6667),
+                "PAPUA SELATAN": (-7.1327, 139.2310),
+            }
+
+            province_aliases = {
+                "NANGGROE ACEH DARUSSALAM": "ACEH",
+                "NAD": "ACEH",
+                "SUMUT": "SUMATERA UTARA",
+                "SUMBAR": "SUMATERA BARAT",
+                "SUMSEL": "SUMATERA SELATAN",
+                "KEPRI": "KEPULAUAN RIAU",
+                "BANGKA BELITUNG": (
+                    "KEPULAUAN BANGKA BELITUNG"
+                ),
+                "DKI": "DKI JAKARTA",
+                "JAKARTA": "DKI JAKARTA",
+                "JABAR": "JAWA BARAT",
+                "JATENG": "JAWA TENGAH",
+                "DAERAH ISTIMEWA YOGYAKARTA": (
+                    "DI YOGYAKARTA"
+                ),
+                "D.I. YOGYAKARTA": "DI YOGYAKARTA",
+                "DIY": "DI YOGYAKARTA",
+                "JATIM": "JAWA TIMUR",
+                "NTB": "NUSA TENGGARA BARAT",
+                "NTT": "NUSA TENGGARA TIMUR",
+                "KALBAR": "KALIMANTAN BARAT",
+                "KALTENG": "KALIMANTAN TENGAH",
+                "KALSEL": "KALIMANTAN SELATAN",
+                "KALTIM": "KALIMANTAN TIMUR",
+                "KALTARA": "KALIMANTAN UTARA",
+                "SULUT": "SULAWESI UTARA",
+                "SULTENG": "SULAWESI TENGAH",
+                "SULBAR": "SULAWESI BARAT",
+                "SULSEL": "SULAWESI SELATAN",
+                "SULTRA": "SULAWESI TENGGARA",
+                "IRIAN JAYA": "PAPUA",
+            }
+
+            province_map_df = (
                 academic_df["propinsi"]
+                .fillna("Tidak diketahui")
+                .astype(str)
+                .str.strip()
+                .str.upper()
+                .replace(province_aliases)
                 .value_counts()
-                .head(20)
                 .rename_axis("Propinsi")
                 .reset_index(name="Mahasiswa")
-                .sort_values("Mahasiswa")
             )
-            figure = px.bar(
-                province_df,
-                x="Mahasiswa",
-                y="Propinsi",
-                orientation="h",
-                title="20 Propinsi Asal Terbesar",
-                color_discrete_sequence=[C["blue"]],
+
+            province_map_df["Latitude"] = (
+                province_map_df["Propinsi"]
+                .map(
+                    lambda value: (
+                        province_coordinates.get(
+                            value,
+                            (None, None),
+                        )[0]
+                    )
+                )
             )
-            figure.update_layout(height=480)
-            st.plotly_chart(
-                figure,
-                use_container_width=True,
+
+            province_map_df["Longitude"] = (
+                province_map_df["Propinsi"]
+                .map(
+                    lambda value: (
+                        province_coordinates.get(
+                            value,
+                            (None, None),
+                        )[1]
+                    )
+                )
             )
+
+            mapped_provinces = province_map_df.dropna(
+                subset=[
+                    "Latitude",
+                    "Longitude",
+                ]
+            ).copy()
+
+            if mapped_provinces.empty:
+                st.info(
+                    "Nama propinsi pada data belum dapat "
+                    "dicocokkan dengan koordinat peta."
+                )
+            else:
+                figure = px.scatter_geo(
+                    mapped_provinces,
+                    lat="Latitude",
+                    lon="Longitude",
+                    size="Mahasiswa",
+                    color="Mahasiswa",
+                    hover_name="Propinsi",
+                    hover_data={
+                        "Mahasiswa": ":,",
+                        "Latitude": False,
+                        "Longitude": False,
+                    },
+                    size_max=42,
+                    title="Peta Sebaran Asal Propinsi Mahasiswa",
+                    color_continuous_scale="Teal",
+                )
+
+                figure.update_geos(
+                    projection_type="mercator",
+                    showland=True,
+                    landcolor="#EEF4F2",
+                    showocean=True,
+                    oceancolor="#EAF4FB",
+                    showcountries=True,
+                    countrycolor="#CBD5E1",
+                    coastlinecolor="#94A3B8",
+                    lataxis_range=[
+                        -12,
+                        7,
+                    ],
+                    lonaxis_range=[
+                        94,
+                        142,
+                    ],
+                )
+
+                figure.update_layout(
+                    height=500,
+                    paper_bgcolor="white",
+                    margin=dict(
+                        l=5,
+                        r=5,
+                        t=55,
+                        b=5,
+                    ),
+                    coloraxis_colorbar_title=(
+                        "Mahasiswa"
+                    ),
+                )
+
+                st.plotly_chart(
+                    figure,
+                    use_container_width=True,
+                )
+
+                unmapped_count = int(
+                    province_map_df[
+                        "Latitude"
+                    ].isna().sum()
+                )
+
+                if unmapped_count:
+                    with st.expander(
+                        (
+                            "Lihat nama propinsi yang belum "
+                            "terpetakan"
+                        )
+                    ):
+                        st.dataframe(
+                            province_map_df[
+                                province_map_df[
+                                    "Latitude"
+                                ].isna()
+                            ][
+                                [
+                                    "Propinsi",
+                                    "Mahasiswa",
+                                ]
+                            ],
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+
+        # ====================================================
+        # INFORMASI KELULUSAN DIPINDAHKAN KE TAB MAHASISWA
+        # ====================================================
+
+        section(
+            "Detail Kelulusan",
+            (
+                "Data yudisium yang sebelumnya berada pada "
+                "Tab Kelulusan, kini menjadi bagian dari "
+                "Tab Mahasiswa."
+            ),
+        )
+
+        if academic_yud.empty:
+            st.info(
+                f"Data yudisium tahun {academic_start_year} "
+                "tidak tersedia untuk filter yang dipilih."
+            )
+        else:
+            graduation_status = pd.DataFrame(
+                {
+                    "Kategori": [
+                        "Lulus tepat waktu",
+                        "Tidak tepat waktu",
+                    ],
+                    "Lulusan": [
+                        on_time_count,
+                        max(
+                            graduate_count
+                            - on_time_count,
+                            0,
+                        ),
+                    ],
+                }
+            )
+
+            graduation_col, ipk_col = st.columns(2)
+
+            with graduation_col:
+                figure = px.pie(
+                    graduation_status,
+                    names="Kategori",
+                    values="Lulusan",
+                    hole=0.58,
+                    title=(
+                        "Komposisi Ketepatan Waktu "
+                        f"Yudisium {academic_start_year}"
+                    ),
+                    color_discrete_sequence=[
+                        C["primary"],
+                        C["orange"],
+                    ],
+                )
+                figure.update_layout(
+                    height=430,
+                    paper_bgcolor="white",
+                )
+                figure.update_traces(
+                    textinfo="label+value+percent"
+                )
+
+                st.plotly_chart(
+                    figure,
+                    use_container_width=True,
+                )
+
+            with ipk_col:
+                graduation_ipk = pd.DataFrame(
+                    {
+                        "Kategori": [
+                            (
+                                "Tepat waktu dan "
+                                "IPK ≥ 3,25"
+                            ),
+                            (
+                                "Tepat waktu dan "
+                                "IPK < 3,25"
+                            ),
+                            "Tidak tepat waktu",
+                        ],
+                        "Lulusan": [
+                            on_time_ipk_count,
+                            max(
+                                on_time_count
+                                - on_time_ipk_count,
+                                0,
+                            ),
+                            max(
+                                graduate_count
+                                - on_time_count,
+                                0,
+                            ),
+                        ],
+                    }
+                )
+
+                figure = px.bar(
+                    graduation_ipk,
+                    x="Kategori",
+                    y="Lulusan",
+                    text="Lulusan",
+                    title=(
+                        "Ketepatan Waktu dan IPK Lulusan"
+                    ),
+                    color="Kategori",
+                    color_discrete_sequence=[
+                        C["primary"],
+                        C["yellow"],
+                        C["orange"],
+                    ],
+                )
+                figure.update_layout(
+                    height=430,
+                    paper_bgcolor="white",
+                    plot_bgcolor="white",
+                    showlegend=False,
+                    xaxis_title=None,
+                    yaxis_title="Lulusan",
+                    margin=dict(
+                        l=10,
+                        r=10,
+                        t=55,
+                        b=90,
+                    ),
+                )
+                figure.update_xaxes(
+                    tickangle=-20
+                )
+
+                st.plotly_chart(
+                    figure,
+                    use_container_width=True,
+                )
+
+            with st.expander(
+                "Lihat detail data yudisium"
+            ):
+                yudisium_columns = [
+                    column
+                    for column in [
+                        "nim",
+                        "nama",
+                        "tanggal_lulus",
+                        "tahun_lulus",
+                        "jenjang_normal",
+                        "fakultas",
+                        "prodi",
+                        "semester",
+                        "ipk",
+                        "tepat_waktu",
+                    ]
+                    if column in academic_yud.columns
+                ]
+
+                st.dataframe(
+                    academic_yud[
+                        yudisium_columns
+                    ],
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "nim": "NIM",
+                        "nama": "Nama",
+                        "tanggal_lulus": (
+                            st.column_config.DateColumn(
+                                "Tanggal Yudisium/Lulus",
+                                format="DD/MM/YYYY",
+                            )
+                        ),
+                        "tahun_lulus": "Tahun Lulus",
+                        "jenjang_normal": "Jenjang",
+                        "fakultas": "Fakultas",
+                        "prodi": "Program Studi",
+                        "semester": "Semester",
+                        "ipk": (
+                            st.column_config.NumberColumn(
+                                "IPK",
+                                format="%.2f",
+                            )
+                        ),
+                        "tepat_waktu": "Tepat Waktu",
+                    },
+                )
 
     with academic_tabs[2]:
         section(
@@ -1947,90 +2437,6 @@ elif selected_menu == "Dashboard Akademik":
 
     with academic_tabs[3]:
         section(
-            "Kelulusan",
-            "Ringkasan yudisium berdasarkan tahun awal periode akademik.",
-        )
-
-        academic_start_year = int(
-            academic_period.split("/")[0]
-        )
-        academic_yud = df_yudisium[
-            df_yudisium["tahun_lulus"].eq(
-                academic_start_year
-            )
-        ].copy()
-
-        if selected_levels:
-            academic_yud = academic_yud[
-                academic_yud["jenjang_normal"].isin(
-                    selected_levels
-                )
-            ]
-        if selected_faculties:
-            academic_yud = academic_yud[
-                academic_yud["fakultas"].isin(
-                    selected_faculties
-                )
-            ]
-        if selected_programs:
-            academic_yud = academic_yud[
-                academic_yud["prodi"].isin(
-                    selected_programs
-                )
-            ]
-
-        graduate_count = academic_yud["nim"].nunique()
-        on_time_count = academic_yud.loc[
-            academic_yud["tepat_waktu_bool"],
-            "nim",
-        ].nunique()
-        on_time_ipk_count = academic_yud.loc[
-            academic_yud["tepat_waktu_ipk_325"],
-            "nim",
-        ].nunique()
-
-        cols = st.columns(4)
-        graduation_values = [
-            ("🎓", "Jumlah lulusan", format_number(graduate_count)),
-            (
-                "⏱️",
-                "Lulus tepat waktu",
-                format_number(on_time_count),
-            ),
-            (
-                "🏅",
-                "Tepat waktu dan IPK ≥ 3,25",
-                format_number(on_time_ipk_count),
-            ),
-            (
-                "📈",
-                "Kelulusan tepat waktu",
-                format_percent(
-                    percentage(
-                        on_time_count,
-                        graduate_count,
-                    )
-                ),
-            ),
-        ]
-
-        for column, item in zip(cols, graduation_values):
-            with column:
-                kpi(
-                    item[0],
-                    item[1],
-                    item[2],
-                    f"Yudisium {academic_start_year}",
-                )
-
-        st.dataframe(
-            academic_yud,
-            use_container_width=True,
-            hide_index=True,
-        )
-
-    with academic_tabs[4]:
-        section(
             "Mahasiswa Berkebutuhan Khusus",
             "Profil berdasarkan difabel.xls.",
         )
@@ -2115,7 +2521,7 @@ elif selected_menu == "Dashboard Akademik":
             use_container_width=True,
         )
 
-    with academic_tabs[5]:
+    with academic_tabs[4]:
         section(
             "Daerah Tertinggal",
             "Mahasiswa dari kabupaten daerah tertinggal 2025–2029.",
