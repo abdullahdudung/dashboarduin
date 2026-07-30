@@ -1687,6 +1687,13 @@ elif selected_menu == "Dashboard Akademik":
     province_options = sorted(
         df["propinsi"].dropna().unique().tolist()
     )
+    status_options = sorted(
+        df["status_kategori"]
+        .dropna()
+        .astype(str)
+        .unique()
+        .tolist()
+    )
 
     with st.expander("🔎 Filter Dashboard Akademik", expanded=True):
         row1 = st.columns(4)
@@ -1730,17 +1737,27 @@ elif selected_menu == "Dashboard Akademik":
                 "Propinsi", province_options, key="academic_provinces",
             )
         with row2[3]:
-            st.write("")
-            st.write("")
+            selected_statuses = st.multiselect(
+                "Status Mahasiswa",
+                status_options,
+                key="academic_statuses",
+            )
+
+        reset_row = st.columns([3, 1])
+        with reset_row[1]:
             if st.button(
                 "↻ Reset Filter", key="reset_filter_akademik",
                 use_container_width=True,
             ):
                 for state_key in [
-                    "academic_period", "academic_cohorts",
-                    "academic_levels", "academic_faculties",
-                    "academic_programs", "academic_paths",
+                    "academic_period",
+                    "academic_cohorts",
+                    "academic_levels",
+                    "academic_faculties",
+                    "academic_programs",
+                    "academic_paths",
                     "academic_provinces",
+                    "academic_statuses",
                 ]:
                     st.session_state.pop(state_key, None)
                 st.rerun()
@@ -1786,6 +1803,13 @@ elif selected_menu == "Dashboard Akademik":
         academic_df = academic_df[
             academic_df["propinsi"].isin(
                 selected_provinces
+            )
+        ]
+
+    if selected_statuses:
+        academic_df = academic_df[
+            academic_df["status_kategori"].isin(
+                selected_statuses
             )
         ]
 
