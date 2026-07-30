@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from io import BytesIO
 import re
 from typing import Any
 
@@ -643,6 +644,424 @@ def empty_dashboard(title: str, year: int, icon: str) -> None:
         """,
         unsafe_allow_html=True,
     )
+
+
+
+def _safe_export_value(value: Any) -> str:
+    """Mengubah nilai DataFrame menjadi teks aman untuk PDF."""
+    if pd.isna(value):
+        return "-"
+    if isinstance(value, pd.Timestamp):
+        return value.strftime("%d/%m/%Y")
+    if isinstance(value, float):
+        return f"{value:,.2f}"
+    return str(value)
+
+
+def create_excel_export(
+    title: str,
+    metrics: dict[str, Any],
+    data: pd.DataFrame,
+) -> bytes:
+    """Membuat workbook Excel berisi ringkasan KPI dan tabel data."""
+    output = BytesIO()
+
+    metric_df = pd.DataFrame(
+        {
+            "Indikator": list(metrics.keys()),
+            "Nilai": list(metrics.values()),
+        }
+    )
+
+    export_data = data.copy()
+
+    # Excel tidak menyukai timezone pada kolom datetime.
+    for column in export_data.columns:
+        if pd.api.types.is_datetime64_any_dtype(
+            export_data[column]
+        ):
+            export_data[column] = (
+                export_data[column]
+                .dt.tz_localize(None)
+            )
+
+    with pd.ExcelWriter(
+        output,
+        engine="openpyxl",
+    ) as writer:
+        metric_df.to_excel(
+            writer,
+            sheet_name="Ringkasan",
+            index=False,
+            startrow=2,
+        )
+        export_data.to_excel(
+            writer,
+            sheet_name="Data",
+            index=False,
+        )
+
+        summary_sheet = writer.book["Ringkasan"]
+        summary_sheet["A1"] = title
+        summary_sheet["A1"].font = (
+            summary_sheet["A1"].font.copy(
+                bold=True,
+                size=14,
+            )
+        )
+
+        for worksheet in writer.book.worksheets:
+            worksheet.freeze_panes = "A2"
+
+            for cells in worksheet.columns:
+                width = max(
+                    len(
+                        str(cell.value)
+                        if cell.value is not None
+                        else ""
+                    )
+                    for cell in cells
+                )
+                worksheet.column_dimensions[
+                    cells[0].column_letter
+                ].width = min(
+                    max(width + 2, 12),
+                    42,
+                )
+
+    return output.getvalue()
+
+
+def create_pdf_export(
+    title: str,
+    subtitle: str,
+    metrics: dict[str, Any],
+    data: pd.DataFrame,
+) -> bytes:
+    """Membuat laporan PDF ringkas menggunakan ReportLab."""
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import (
+        ParagraphStyle,
+        getSampleStyleSheet,
+    )
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (
+        PageBreak,
+        Paragraph,
+        SimpleDocTemplate,
+        Spacer,
+        Table,
+        TableStyle,
+    )
+
+    output = BytesIO()
+    document = SimpleDocTemplate(
+        output,
+        pagesize=landscape(A4),
+        rightMargin=12 * mm,
+        leftMargin=12 * mm,
+        topMargin=12 * mm,
+        bottomMargin=12 * mm,
+        title=title,
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "ReportTitle",
+        parent=styles["Title"],
+        alignment=TA_CENTER,
+        fontName="Helvetica-Bold",
+        fontSize=16,
+        leading=20,
+        textColor=colors.HexColor("#00695C"),
+    )
+    subtitle_style = ParagraphStyle(
+        "ReportSubtitle",
+        parent=styles["Normal"],
+        alignment=TA_CENTER,
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor("#64748B"),
+    )
+    cell_style = ParagraphStyle(
+        "Cell",
+        parent=styles["BodyText"],
+        fontSize=6.5,
+        leading=8,
+    )
+    header_style = ParagraphStyle(
+        "HeaderCell",
+        parent=cell_style,
+        fontName="Helvetica-Bold",
+        textColor=colors.white,
+    )
+
+    story = [
+        Paragraph(title, title_style),
+        Paragraph(subtitle, subtitle_style),
+        Spacer(1, 7 * mm),
+    ]
+
+    metric_rows = [
+        [
+            Paragraph("Indikator", header_style),
+            Paragraph("Nilai", header_style),
+        ]
+    ]
+
+    for label, value in metrics.items():
+        metric_rows.append(
+            [
+                Paragraph(
+                    _safe_export_value(label),
+                    cell_style,
+                ),
+                Paragraph(
+                    _safe_export_value(value),
+                    cell_style,
+                ),
+            ]
+        )
+
+    metric_table = Table(
+        metric_rows,
+        colWidths=[90 * mm, 70 * mm],
+        repeatRows=1,
+        hAlign="CENTER",
+    )
+    metric_table.setStyle(
+        TableStyle(
+            [
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.HexColor("#00695C"),
+                ),
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.35,
+                    colors.HexColor("#CBD5E1"),
+                ),
+                (
+                    "BACKGROUND",
+                    (0, 1),
+                    (-1, -1),
+                    colors.HexColor("#F8FAFC"),
+                ),
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "TOP",
+                ),
+                (
+                    "LEFTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    5,
+                ),
+                (
+                    "RIGHTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    5,
+                ),
+            ]
+        )
+    )
+    story.extend(
+        [
+            metric_table,
+            Spacer(1, 8 * mm),
+            Paragraph(
+                "Ringkasan Data",
+                styles["Heading2"],
+            ),
+            Spacer(1, 3 * mm),
+        ]
+    )
+
+    export_data = data.copy()
+
+    if export_data.empty:
+        story.append(
+            Paragraph(
+                "Tidak ada data sesuai filter yang dipilih.",
+                styles["Normal"],
+            )
+        )
+    else:
+        # Menjaga PDF tetap terbaca pada tabel dengan banyak kolom.
+        max_columns = 10
+        if len(export_data.columns) > max_columns:
+            export_data = export_data.iloc[
+                :,
+                :max_columns,
+            ]
+
+        headers = [
+            Paragraph(
+                _safe_export_value(column),
+                header_style,
+            )
+            for column in export_data.columns
+        ]
+
+        table_rows = [headers]
+
+        for row in export_data.itertuples(
+            index=False,
+            name=None,
+        ):
+            table_rows.append(
+                [
+                    Paragraph(
+                        _safe_export_value(value),
+                        cell_style,
+                    )
+                    for value in row
+                ]
+            )
+
+        available_width = landscape(A4)[0] - 24 * mm
+        column_width = (
+            available_width
+            / max(len(export_data.columns), 1)
+        )
+
+        data_table = Table(
+            table_rows,
+            colWidths=[
+                column_width
+                for _ in export_data.columns
+            ],
+            repeatRows=1,
+        )
+        data_table.setStyle(
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, 0),
+                        colors.HexColor("#00695C"),
+                    ),
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.25,
+                        colors.HexColor("#CBD5E1"),
+                    ),
+                    (
+                        "ROWBACKGROUNDS",
+                        (0, 1),
+                        (-1, -1),
+                        [
+                            colors.white,
+                            colors.HexColor("#F8FAFC"),
+                        ],
+                    ),
+                    (
+                        "VALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "TOP",
+                    ),
+                    (
+                        "LEFTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        3,
+                    ),
+                    (
+                        "RIGHTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        3,
+                    ),
+                ]
+            )
+        )
+        story.append(data_table)
+
+    document.build(story)
+    return output.getvalue()
+
+
+def export_summary_panel(
+    title: str,
+    subtitle: str,
+    metrics: dict[str, Any],
+    data: pd.DataFrame,
+    filename_prefix: str,
+    key_prefix: str,
+) -> None:
+    """Menampilkan ringkasan data serta tombol ekspor PDF dan Excel."""
+    section(
+        "Ringkasan Data dan Export",
+        (
+            "Ringkasan ini mengikuti seluruh filter yang sedang "
+            "aktif pada tab. Gunakan tombol untuk mengunduh "
+            "laporan PDF atau data Excel."
+        ),
+    )
+
+    metric_table = pd.DataFrame(
+        {
+            "Indikator": list(metrics.keys()),
+            "Nilai": list(metrics.values()),
+        }
+    )
+
+    st.dataframe(
+        metric_table,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    export_columns = st.columns(
+        [1, 1, 3]
+    )
+
+    with export_columns[0]:
+        excel_bytes = create_excel_export(
+            title,
+            metrics,
+            data,
+        )
+        st.download_button(
+            label="⬇ Export Excel",
+            data=excel_bytes,
+            file_name=f"{filename_prefix}.xlsx",
+            mime=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+            key=f"{key_prefix}_excel",
+            use_container_width=True,
+        )
+
+    with export_columns[1]:
+        pdf_bytes = create_pdf_export(
+            title,
+            subtitle,
+            metrics,
+            data,
+        )
+        st.download_button(
+            label="⬇ Export PDF",
+            data=pdf_bytes,
+            file_name=f"{filename_prefix}.pdf",
+            mime="application/pdf",
+            key=f"{key_prefix}_pdf",
+            use_container_width=True,
+        )
 
 
 # ============================================================
@@ -1663,6 +2082,29 @@ elif selected_menu == "Dashboard Akademik":
             },
         )
 
+
+        export_summary_panel(
+            title="Ringkasan Akreditasi Program Studi",
+            subtitle=(
+                f"Dashboard Akademik - {academic_period}"
+            ),
+            metrics={
+                "Periode Akademik": academic_period,
+                "Jumlah Program Studi": total_prodi_akreditasi,
+                "Akreditasi Aktif": akreditasi_aktif,
+                "Peringkat Unggul": jumlah_unggul,
+                "Berakhir Dalam 1 Tahun": segera_berakhir,
+                "Akreditasi Kedaluwarsa": (
+                    akreditasi_kedaluwarsa
+                ),
+            },
+            data=accreditation_table,
+            filename_prefix=(
+                "ringkasan_akreditasi_program_studi"
+            ),
+            key_prefix="export_program_studi",
+        )
+
     with academic_tabs[1]:
         section(
             "Mahasiswa",
@@ -2319,6 +2761,35 @@ elif selected_menu == "Dashboard Akademik":
                     },
                 )
 
+
+        mahasiswa_export_data = prodi_summary.copy()
+        mahasiswa_export_data["Periode Akademik"] = (
+            academic_period
+        )
+
+        export_summary_panel(
+            title="Ringkasan Data Mahasiswa",
+            subtitle=(
+                f"Dashboard Akademik - {academic_period}"
+            ),
+            metrics={
+                "Periode Akademik": academic_period,
+                "Total Mahasiswa": len(academic_df),
+                "Mahasiswa Aktif": len(academic_active),
+                "Jumlah Lulusan": graduate_count,
+                "Lulus Tepat Waktu": on_time_count,
+                "Tepat Waktu dan IPK >= 3,25": (
+                    on_time_ipk_count
+                ),
+                "Persentase Kelulusan Tepat Waktu": (
+                    format_percent(on_time_percentage)
+                ),
+            },
+            data=mahasiswa_export_data,
+            filename_prefix="ringkasan_mahasiswa",
+            key_prefix="export_mahasiswa",
+        )
+
     with academic_tabs[2]:
         section(
             "Penerimaan Mahasiswa Baru",
@@ -2435,6 +2906,62 @@ elif selected_menu == "Dashboard Akademik":
             use_container_width=True,
         )
 
+
+        pmb_summary_export = (
+            academic_pmb
+            .groupby(
+                [
+                    "fakultas",
+                    "jurusan",
+                    "jenjang_normal",
+                    "jenis_seleksi",
+                ],
+                dropna=False,
+            )
+            .agg(
+                Peminat=("peminat", "sum"),
+                Lulus_Seleksi=(
+                    "lulus_seleksi",
+                    "sum",
+                ),
+                Daftar_Ulang=(
+                    "daftar_ulang",
+                    "sum",
+                ),
+            )
+            .reset_index()
+        )
+
+        pmb_summary_export["Yield_Rate"] = (
+            pmb_summary_export["Daftar_Ulang"]
+            / pmb_summary_export[
+                "Lulus_Seleksi"
+            ].replace(0, pd.NA)
+            * 100
+        ).round(2)
+
+        export_summary_panel(
+            title="Ringkasan Penerimaan Mahasiswa Baru",
+            subtitle=(
+                f"Dashboard Akademik - PMB {academic_pmb_year}"
+            ),
+            metrics={
+                "Tahun PMB": academic_pmb_year,
+                "Jumlah Peminat": format_number(total_peminat),
+                "Lulus Seleksi": format_number(total_lulus),
+                "Daftar Ulang": format_number(total_daftar),
+                "Yield Rate": format_percent(
+                    percentage(
+                        total_daftar,
+                        total_lulus,
+                    )
+                ),
+            },
+            data=pmb_summary_export,
+            filename_prefix="ringkasan_pmb",
+            key_prefix="export_pmb",
+        )
+
     with academic_tabs[3]:
         section(
             "Mahasiswa Berkebutuhan Khusus",
@@ -2521,6 +3048,71 @@ elif selected_menu == "Dashboard Akademik":
             use_container_width=True,
         )
 
+
+        kebutuhan_summary_export = (
+            filtered_difabel
+            .groupby(
+                [
+                    "fakultas",
+                    "jurusan",
+                    "kebutuhan_khusus",
+                ],
+                dropna=False,
+            )
+            .agg(
+                Jumlah_Mahasiswa=("nim", "nunique"),
+                Mahasiswa_Aktif=(
+                    "status_normal",
+                    lambda values: (
+                        values.eq("aktif").sum()
+                    ),
+                ),
+            )
+            .reset_index()
+            .sort_values(
+                "Jumlah_Mahasiswa",
+                ascending=False,
+            )
+        )
+
+        export_summary_panel(
+            title=(
+                "Ringkasan Mahasiswa Berkebutuhan Khusus"
+            ),
+            subtitle=(
+                f"Dashboard Akademik - {academic_period}"
+            ),
+            metrics={
+                "Periode Akademik": academic_period,
+                "Total Mahasiswa Berkebutuhan Khusus": (
+                    filtered_difabel["nim"].nunique()
+                ),
+                "Mahasiswa Aktif": (
+                    filtered_difabel.loc[
+                        filtered_difabel[
+                            "status_normal"
+                        ].eq("aktif"),
+                        "nim",
+                    ].nunique()
+                ),
+                "Jumlah Program Studi": (
+                    filtered_difabel[
+                        "jurusan"
+                    ].nunique()
+                ),
+                "Jenis Kebutuhan Khusus": (
+                    filtered_difabel[
+                        "kebutuhan_khusus"
+                    ].nunique()
+                ),
+            },
+            data=kebutuhan_summary_export,
+            filename_prefix=(
+                "ringkasan_mahasiswa_kebutuhan_khusus"
+            ),
+            key_prefix="export_kebutuhan_khusus",
+        )
+
     with academic_tabs[4]:
         section(
             "Daerah Tertinggal",
@@ -2575,6 +3167,42 @@ elif selected_menu == "Dashboard Akademik":
             disadvantaged_summary,
             use_container_width=True,
             hide_index=True,
+        )
+
+        export_summary_panel(
+            title="Ringkasan Mahasiswa Daerah Tertinggal",
+            subtitle=(
+                f"Dashboard Akademik - {academic_period}"
+            ),
+            metrics={
+                "Periode Akademik": academic_period,
+                "Mahasiswa Daerah Tertinggal": (
+                    len(disadvantaged)
+                ),
+                "Kabupaten Teridentifikasi": (
+                    disadvantaged[
+                        "kota_normal"
+                    ].nunique()
+                ),
+                "Propinsi Teridentifikasi": (
+                    disadvantaged[
+                        "propinsi"
+                    ].nunique()
+                ),
+                "Persentase dari Mahasiswa Terfilter": (
+                    format_percent(
+                        percentage(
+                            len(disadvantaged),
+                            len(academic_df),
+                        )
+                    )
+                ),
+            },
+            data=disadvantaged_summary,
+            filename_prefix=(
+                "ringkasan_mahasiswa_daerah_tertinggal"
+            ),
+            key_prefix="export_daerah_tertinggal",
         )
 
 
