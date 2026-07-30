@@ -219,7 +219,7 @@ openpyxl>=3.1,<4
 reportlab>=4.2,<5
 ```
 
-## Menjalankan di Windows 11 / Antigravity IDE
+## Menjalankan di Windows 11
 
 Buka terminal pada folder proyek, lalu jalankan:
 
