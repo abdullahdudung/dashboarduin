@@ -500,6 +500,61 @@ def normalize_status(value: Any) -> str:
     return str(value).strip().lower()
 
 
+def status_category(value: Any) -> str:
+    """
+    Menyeragamkan variasi penulisan status mahasiswa menjadi
+    kategori dashboard yang konsisten.
+    """
+    text = normalize_status(value)
+
+    if text in {"aktif", "active"}:
+        return "Aktif"
+
+    if "lulus" in text or "alumni" in text:
+        return "Lulus"
+
+    if "cuti" in text:
+        return "Cuti"
+
+    if (
+        "tidak aktif" in text
+        or "non aktif" in text
+        or "nonaktif" in text
+        or text in {"na", "n/a"}
+    ):
+        return "Tidak Aktif"
+
+    if (
+        "drop out" in text
+        or "dropout" in text
+        or "putus studi" in text
+        or text == "do"
+        or text.startswith("do ")
+    ):
+        return "DO/Putus Studi"
+
+    if (
+        "mengundurkan diri" in text
+        or "undur diri" in text
+        or "resign" in text
+    ):
+        return "Mengundurkan Diri"
+
+    if "meninggal" in text or "wafat" in text:
+        return "Meninggal"
+
+    if "skors" in text or "suspend" in text:
+        return "Skorsing"
+
+    if "transfer" in text or "pindah" in text:
+        return "Pindah/Transfer"
+
+    if text in {"", "nan", "none", "tidak diketahui"}:
+        return "Tidak Diketahui"
+
+    return str(value).strip().title()
+
+
 def normalize_gender(value: Any) -> str:
     text = str(value).strip().lower()
     if text in {"l", "laki-laki", "laki laki", "pria"}:
@@ -1124,6 +1179,11 @@ def load_data() -> tuple[
         .fillna("")
         .apply(normalize_status)
     )
+    mahasiswa["status_kategori"] = (
+        mahasiswa["status"]
+        .fillna("")
+        .apply(status_category)
+    )
     mahasiswa["gender_normal"] = (
         mahasiswa["kelamin"]
         .fillna("")
@@ -1739,6 +1799,7 @@ elif selected_menu == "Dashboard Akademik":
             "Program Studi",
             "Mahasiswa",
             "PMB",
+            "Kelulusan",
             "Kebutuhan Khusus",
             "Daerah Tertinggal",
         ]
@@ -1942,86 +2003,11 @@ elif selected_menu == "Dashboard Akademik":
             )
 
         section(
-            "Masa Berlaku Akreditasi",
+            "Daftar dan Masa Berlaku Akreditasi Program Studi",
             (
-                "Prioritas program studi dengan masa berlaku "
-                "akreditasi telah berakhir atau akan berakhir "
-                "dalam satu tahun."
-            ),
-        )
-
-        accreditation_attention = (
-            akreditasi_filter[
-                akreditasi_filter["masa_berakhir"].isin(
-                    [
-                        "Sudah berakhir",
-                        "Berakhir ≤ 1 tahun",
-                    ]
-                )
-            ]
-            .sort_values(
-                "masa_sk_akhir_akreditasi",
-                ascending=True,
-            )
-            .copy()
-        )
-
-        if accreditation_attention.empty:
-            st.success(
-                "Tidak ada program studi sesuai filter yang "
-                "masa akreditasinya telah berakhir atau akan "
-                "berakhir dalam satu tahun."
-            )
-        else:
-            st.dataframe(
-                accreditation_attention[
-                    [
-                        "jenjang_normal",
-                        "fakultas",
-                        "prodi",
-                        "peringkat",
-                        "no_sk_akreditasi",
-                        "masa_mulai_sk_akreditasi",
-                        "masa_sk_akhir_akreditasi",
-                        "masa_berakhir",
-                        "sisa_hari",
-                    ]
-                ],
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "jenjang_normal": "Jenjang",
-                    "fakultas": "Fakultas",
-                    "prodi": "Program Studi",
-                    "peringkat": "Peringkat",
-                    "no_sk_akreditasi": "Nomor SK",
-                    "masa_mulai_sk_akreditasi": (
-                        st.column_config.DateColumn(
-                            "Mulai Berlaku",
-                            format="DD/MM/YYYY",
-                        )
-                    ),
-                    "masa_sk_akhir_akreditasi": (
-                        st.column_config.DateColumn(
-                            "Akhir Berlaku",
-                            format="DD/MM/YYYY",
-                        )
-                    ),
-                    "masa_berakhir": "Status Masa Berlaku",
-                    "sisa_hari": (
-                        st.column_config.NumberColumn(
-                            "Sisa Hari",
-                            format="%d",
-                        )
-                    ),
-                },
-            )
-
-        section(
-            "Daftar Akreditasi Program Studi",
-            (
-                "Tabel lengkap akreditasi program studi sesuai "
-                "filter jenjang, fakultas, dan program studi."
+                "Tabel terpadu akreditasi program studi, termasuk "
+                "peringkat, nomor SK, masa berlaku, status aktif, "
+                "dan prioritas perpanjangan."
             ),
         )
 
@@ -2038,14 +2024,37 @@ elif selected_menu == "Dashboard Akademik":
                     "masa_sk_akhir_akreditasi",
                     "status_akreditasi",
                     "masa_berakhir",
+                    "sisa_hari",
                 ]
             ]
+            .assign(
+                prioritas_urutan=lambda frame: (
+                    frame["masa_berakhir"].map(
+                        {
+                            "Sudah berakhir": 1,
+                            "Berakhir ≤ 1 tahun": 2,
+                            "Normal": 3,
+                            "Belum diketahui": 4,
+                        }
+                    ).fillna(5)
+                )
+            )
             .sort_values(
                 [
+                    "prioritas_urutan",
+                    "masa_sk_akhir_akreditasi",
                     "fakultas",
-                    "jenjang_normal",
                     "prodi",
-                ]
+                ],
+                ascending=[
+                    True,
+                    True,
+                    True,
+                    True,
+                ],
+            )
+            .drop(
+                columns=["prioritas_urutan"]
             )
         )
 
@@ -2078,7 +2087,13 @@ elif selected_menu == "Dashboard Akademik":
                     )
                 ),
                 "status_akreditasi": "Status Akreditasi",
-                "masa_berakhir": "Masa Berlaku",
+                "masa_berakhir": "Status Masa Berlaku",
+                "sisa_hari": (
+                    st.column_config.NumberColumn(
+                        "Sisa Hari",
+                        format="%d",
+                    )
+                ),
             },
         )
 
@@ -2109,111 +2124,107 @@ elif selected_menu == "Dashboard Akademik":
         section(
             "Mahasiswa",
             (
-                "Ringkasan populasi mahasiswa, kelulusan, "
-                "program studi, jenis kelamin, dan persebaran "
-                "asal propinsi sesuai filter akademik."
+                "Ringkasan populasi mahasiswa, program studi, "
+                "jenis kelamin, dan persebaran asal propinsi "
+                "sesuai filter akademik."
             ),
         )
 
-        # Tahun yudisium mengikuti tahun awal periode akademik.
-        academic_start_year = int(
-            academic_period.split("/")[0]
+        status_counts = (
+            academic_df["status_kategori"]
+            .fillna("Tidak Diketahui")
+            .value_counts()
+            .to_dict()
         )
 
-        academic_yud = df_yudisium[
-            df_yudisium["tahun_lulus"].eq(
-                academic_start_year
-            )
-        ].copy()
+        preferred_status_order = [
+            "Aktif",
+            "Lulus",
+            "Cuti",
+            "Tidak Aktif",
+            "DO/Putus Studi",
+            "Mengundurkan Diri",
+            "Meninggal",
+            "Skorsing",
+            "Pindah/Transfer",
+            "Tidak Diketahui",
+        ]
 
-        if selected_levels:
-            academic_yud = academic_yud[
-                academic_yud["jenjang_normal"].isin(
-                    selected_levels
-                )
-            ]
+        status_icon_map = {
+            "Aktif": "✅",
+            "Lulus": "🎓",
+            "Cuti": "⏸️",
+            "Tidak Aktif": "🚫",
+            "DO/Putus Studi": "⚠️",
+            "Mengundurkan Diri": "↩️",
+            "Meninggal": "🕊️",
+            "Skorsing": "⛔",
+            "Pindah/Transfer": "🔄",
+            "Tidak Diketahui": "❓",
+        }
 
-        if selected_faculties:
-            academic_yud = academic_yud[
-                academic_yud["fakultas"].isin(
-                    selected_faculties
-                )
-            ]
+        visible_statuses = [
+            status_name
+            for status_name in preferred_status_order
+            if status_counts.get(status_name, 0) > 0
+        ]
 
-        if selected_programs:
-            academic_yud = academic_yud[
-                academic_yud["prodi"].isin(
-                    selected_programs
-                )
-            ]
-
-        graduate_count = academic_yud[
-            "nim"
-        ].nunique()
-
-        on_time_count = academic_yud.loc[
-            academic_yud["tepat_waktu_bool"],
-            "nim",
-        ].nunique()
-
-        on_time_ipk_count = academic_yud.loc[
-            academic_yud["tepat_waktu_ipk_325"],
-            "nim",
-        ].nunique()
-
-        on_time_percentage = percentage(
-            on_time_count,
-            graduate_count,
+        other_statuses = sorted(
+            status_name
+            for status_name in status_counts
+            if status_name not in preferred_status_order
         )
+        visible_statuses.extend(other_statuses)
 
-        # Kartu informasi: populasi mahasiswa + seluruh kartu kelulusan.
-        cols = st.columns(6)
-
-        student_values = [
+        student_cards = [
             (
                 "👥",
                 "Total mahasiswa",
                 format_number(len(academic_df)),
                 "Sesuai filter akademik",
-            ),
-            (
-                "✅",
-                "Mahasiswa aktif",
-                format_number(len(academic_active)),
-                "Status mahasiswa aktif",
-            ),
-            (
-                "🎓",
-                "Jumlah lulusan",
-                format_number(graduate_count),
-                f"Yudisium {academic_start_year}",
-            ),
-            (
-                "⏱️",
-                "Lulus tepat waktu",
-                format_number(on_time_count),
-                f"Yudisium {academic_start_year}",
-            ),
-            (
-                "🏅",
-                "Tepat waktu dan IPK ≥ 3,25",
-                format_number(on_time_ipk_count),
-                f"Yudisium {academic_start_year}",
-            ),
-            (
-                "📈",
-                "Kelulusan tepat waktu",
-                format_percent(on_time_percentage),
-                f"Yudisium {academic_start_year}",
-            ),
+            )
         ]
 
-        for column, item in zip(
-            cols,
-            student_values,
+        for status_name in visible_statuses:
+            student_cards.append(
+                (
+                    status_icon_map.get(
+                        status_name,
+                        "📌",
+                    ),
+                    status_name,
+                    format_number(
+                        status_counts.get(
+                            status_name,
+                            0,
+                        )
+                    ),
+                    "Status mahasiswa",
+                )
+            )
+
+        # Maksimal lima kartu per baris agar tetap nyaman dibaca.
+        for start_index in range(
+            0,
+            len(student_cards),
+            5,
         ):
-            with column:
-                kpi(*item)
+            card_columns = st.columns(
+                min(
+                    5,
+                    len(student_cards)
+                    - start_index,
+                )
+            )
+
+            for column, item in zip(
+                card_columns,
+                student_cards[
+                    start_index:start_index + 5
+                ],
+            ):
+                with column:
+                    kpi(*item)
 
         # ====================================================
         # 20 PROGRAM STUDI DENGAN MAHASISWA TERBANYAK
@@ -2227,7 +2238,7 @@ elif selected_menu == "Dashboard Akademik":
             ),
         )
 
-        prodi_summary = (
+        prodi_base = (
             academic_df
             .groupby(
                 [
@@ -2239,19 +2250,107 @@ elif selected_menu == "Dashboard Akademik":
             )
             .agg(
                 Total_Mahasiswa=("nim", "nunique"),
-                Mahasiswa_Aktif=(
-                    "status_normal",
-                    lambda values: (
-                        values.eq("aktif").sum()
-                    ),
-                ),
             )
             .reset_index()
+        )
+
+        prodi_status = (
+            academic_df
+            .pivot_table(
+                index=[
+                    "fakultas",
+                    "jurusan",
+                    "jenjang_normal",
+                ],
+                columns="status_kategori",
+                values="nim",
+                aggfunc=pd.Series.nunique,
+                fill_value=0,
+            )
+            .reset_index()
+        )
+
+        status_column_order = [
+            status_name
+            for status_name in preferred_status_order
+            if status_name in prodi_status.columns
+        ]
+
+        status_column_order.extend(
+            sorted(
+                column
+                for column in prodi_status.columns
+                if (
+                    column
+                    not in {
+                        "fakultas",
+                        "jurusan",
+                        "jenjang_normal",
+                    }
+                    and column
+                    not in status_column_order
+                )
+            )
+        )
+
+        status_export_names = {
+            "Aktif": "Mahasiswa Aktif",
+            "Lulus": "Lulus",
+            "Cuti": "Cuti",
+            "Tidak Aktif": "Tidak Aktif",
+            "DO/Putus Studi": "DO/Putus Studi",
+            "Mengundurkan Diri": "Mengundurkan Diri",
+            "Meninggal": "Meninggal",
+            "Skorsing": "Skorsing",
+            "Pindah/Transfer": "Pindah/Transfer",
+            "Tidak Diketahui": "Tidak Diketahui",
+        }
+
+        prodi_status = prodi_status.rename(
+            columns={
+                status_name: status_export_names.get(
+                    status_name,
+                    status_name,
+                )
+                for status_name in status_column_order
+            }
+        )
+
+        renamed_status_columns = [
+            status_export_names.get(
+                status_name,
+                status_name,
+            )
+            for status_name in status_column_order
+        ]
+
+        prodi_summary = (
+            prodi_base
+            .merge(
+                prodi_status,
+                on=[
+                    "fakultas",
+                    "jurusan",
+                    "jenjang_normal",
+                ],
+                how="left",
+            )
+            .fillna(0)
             .sort_values(
                 "Total_Mahasiswa",
                 ascending=False,
             )
         )
+
+        for column in renamed_status_columns:
+            prodi_summary[column] = (
+                pd.to_numeric(
+                    prodi_summary[column],
+                    errors="coerce",
+                )
+                .fillna(0)
+                .astype(int)
+            )
 
         chart_df = (
             prodi_summary
@@ -2310,7 +2409,13 @@ elif selected_menu == "Dashboard Akademik":
                     "jurusan": "Program Studi",
                     "jenjang_normal": "Jenjang",
                     "Total_Mahasiswa": "Total Mahasiswa",
-                    "Mahasiswa_Aktif": "Mahasiswa Aktif",
+                    **{
+                        column: st.column_config.NumberColumn(
+                            column,
+                            format="%d",
+                        )
+                        for column in renamed_status_columns
+                    },
                 },
             )
 
@@ -2577,191 +2682,6 @@ elif selected_menu == "Dashboard Akademik":
                             hide_index=True,
                         )
 
-        # ====================================================
-        # INFORMASI KELULUSAN DIPINDAHKAN KE TAB MAHASISWA
-        # ====================================================
-
-        section(
-            "Detail Kelulusan",
-            (
-                "Data yudisium yang sebelumnya berada pada "
-                "Tab Kelulusan, kini menjadi bagian dari "
-                "Tab Mahasiswa."
-            ),
-        )
-
-        if academic_yud.empty:
-            st.info(
-                f"Data yudisium tahun {academic_start_year} "
-                "tidak tersedia untuk filter yang dipilih."
-            )
-        else:
-            graduation_status = pd.DataFrame(
-                {
-                    "Kategori": [
-                        "Lulus tepat waktu",
-                        "Tidak tepat waktu",
-                    ],
-                    "Lulusan": [
-                        on_time_count,
-                        max(
-                            graduate_count
-                            - on_time_count,
-                            0,
-                        ),
-                    ],
-                }
-            )
-
-            graduation_col, ipk_col = st.columns(2)
-
-            with graduation_col:
-                figure = px.pie(
-                    graduation_status,
-                    names="Kategori",
-                    values="Lulusan",
-                    hole=0.58,
-                    title=(
-                        "Komposisi Ketepatan Waktu "
-                        f"Yudisium {academic_start_year}"
-                    ),
-                    color_discrete_sequence=[
-                        C["primary"],
-                        C["orange"],
-                    ],
-                )
-                figure.update_layout(
-                    height=430,
-                    paper_bgcolor="white",
-                )
-                figure.update_traces(
-                    textinfo="label+value+percent"
-                )
-
-                st.plotly_chart(
-                    figure,
-                    use_container_width=True,
-                )
-
-            with ipk_col:
-                graduation_ipk = pd.DataFrame(
-                    {
-                        "Kategori": [
-                            (
-                                "Tepat waktu dan "
-                                "IPK ≥ 3,25"
-                            ),
-                            (
-                                "Tepat waktu dan "
-                                "IPK < 3,25"
-                            ),
-                            "Tidak tepat waktu",
-                        ],
-                        "Lulusan": [
-                            on_time_ipk_count,
-                            max(
-                                on_time_count
-                                - on_time_ipk_count,
-                                0,
-                            ),
-                            max(
-                                graduate_count
-                                - on_time_count,
-                                0,
-                            ),
-                        ],
-                    }
-                )
-
-                figure = px.bar(
-                    graduation_ipk,
-                    x="Kategori",
-                    y="Lulusan",
-                    text="Lulusan",
-                    title=(
-                        "Ketepatan Waktu dan IPK Lulusan"
-                    ),
-                    color="Kategori",
-                    color_discrete_sequence=[
-                        C["primary"],
-                        C["yellow"],
-                        C["orange"],
-                    ],
-                )
-                figure.update_layout(
-                    height=430,
-                    paper_bgcolor="white",
-                    plot_bgcolor="white",
-                    showlegend=False,
-                    xaxis_title=None,
-                    yaxis_title="Lulusan",
-                    margin=dict(
-                        l=10,
-                        r=10,
-                        t=55,
-                        b=90,
-                    ),
-                )
-                figure.update_xaxes(
-                    tickangle=-20
-                )
-
-                st.plotly_chart(
-                    figure,
-                    use_container_width=True,
-                )
-
-            with st.expander(
-                "Lihat detail data yudisium"
-            ):
-                yudisium_columns = [
-                    column
-                    for column in [
-                        "nim",
-                        "nama",
-                        "tanggal_lulus",
-                        "tahun_lulus",
-                        "jenjang_normal",
-                        "fakultas",
-                        "prodi",
-                        "semester",
-                        "ipk",
-                        "tepat_waktu",
-                    ]
-                    if column in academic_yud.columns
-                ]
-
-                st.dataframe(
-                    academic_yud[
-                        yudisium_columns
-                    ],
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "nim": "NIM",
-                        "nama": "Nama",
-                        "tanggal_lulus": (
-                            st.column_config.DateColumn(
-                                "Tanggal Yudisium/Lulus",
-                                format="DD/MM/YYYY",
-                            )
-                        ),
-                        "tahun_lulus": "Tahun Lulus",
-                        "jenjang_normal": "Jenjang",
-                        "fakultas": "Fakultas",
-                        "prodi": "Program Studi",
-                        "semester": "Semester",
-                        "ipk": (
-                            st.column_config.NumberColumn(
-                                "IPK",
-                                format="%.2f",
-                            )
-                        ),
-                        "tepat_waktu": "Tepat Waktu",
-                    },
-                )
-
-
         mahasiswa_export_data = prodi_summary.copy()
         mahasiswa_export_data["Periode Akademik"] = (
             academic_period
@@ -2775,14 +2695,23 @@ elif selected_menu == "Dashboard Akademik":
             metrics={
                 "Periode Akademik": academic_period,
                 "Total Mahasiswa": len(academic_df),
-                "Mahasiswa Aktif": len(academic_active),
-                "Jumlah Lulusan": graduate_count,
-                "Lulus Tepat Waktu": on_time_count,
-                "Tepat Waktu dan IPK >= 3,25": (
-                    on_time_ipk_count
+                **{
+                    status_name: int(
+                        status_counts.get(
+                            status_name,
+                            0,
+                        )
+                    )
+                    for status_name in visible_statuses
+                },
+                "Jumlah Fakultas": (
+                    academic_df["fakultas"].nunique()
                 ),
-                "Persentase Kelulusan Tepat Waktu": (
-                    format_percent(on_time_percentage)
+                "Jumlah Program Studi": (
+                    academic_df["jurusan"].nunique()
+                ),
+                "Jumlah Propinsi Asal": (
+                    academic_df["propinsi"].nunique()
                 ),
             },
             data=mahasiswa_export_data,
@@ -2932,13 +2861,26 @@ elif selected_menu == "Dashboard Akademik":
             .reset_index()
         )
 
+        pmb_daftar_ulang_numeric = pd.to_numeric(
+            pmb_summary_export["Daftar_Ulang"],
+            errors="coerce",
+        )
+
+        pmb_lulus_numeric = pd.to_numeric(
+            pmb_summary_export["Lulus_Seleksi"],
+            errors="coerce",
+        )
+
         pmb_summary_export["Yield_Rate"] = (
-            pmb_summary_export["Daftar_Ulang"]
-            / pmb_summary_export[
-                "Lulus_Seleksi"
-            ].replace(0, pd.NA)
-            * 100
-        ).round(2)
+            pmb_daftar_ulang_numeric
+            .div(
+                pmb_lulus_numeric.where(
+                    pmb_lulus_numeric.ne(0)
+                )
+            )
+            .mul(100)
+            .round(2)
+        )
 
         export_summary_panel(
             title="Ringkasan Penerimaan Mahasiswa Baru",
@@ -2963,6 +2905,434 @@ elif selected_menu == "Dashboard Akademik":
         )
 
     with academic_tabs[3]:
+        section(
+            "Kelulusan",
+            (
+                "Ringkasan yudisium, ketepatan waktu kelulusan, "
+                "dan capaian IPK lulusan berdasarkan tahun awal "
+                "periode akademik."
+            ),
+        )
+
+        academic_start_year = int(
+            academic_period.split("/")[0]
+        )
+
+        academic_yud = df_yudisium[
+            df_yudisium["tahun_lulus"].eq(
+                academic_start_year
+            )
+        ].copy()
+
+        if selected_levels:
+            academic_yud = academic_yud[
+                academic_yud["jenjang_normal"].isin(
+                    selected_levels
+                )
+            ]
+
+        if selected_faculties:
+            academic_yud = academic_yud[
+                academic_yud["fakultas"].isin(
+                    selected_faculties
+                )
+            ]
+
+        if selected_programs:
+            academic_yud = academic_yud[
+                academic_yud["prodi"].isin(
+                    selected_programs
+                )
+            ]
+
+        graduate_count = academic_yud[
+            "nim"
+        ].nunique()
+
+        on_time_count = academic_yud.loc[
+            academic_yud["tepat_waktu_bool"],
+            "nim",
+        ].nunique()
+
+        on_time_ipk_count = academic_yud.loc[
+            academic_yud["tepat_waktu_ipk_325"],
+            "nim",
+        ].nunique()
+
+        on_time_percentage = percentage(
+            on_time_count,
+            graduate_count,
+        )
+
+        graduation_cols = st.columns(4)
+
+        graduation_values = [
+            (
+                "🎓",
+                "Jumlah lulusan",
+                format_number(graduate_count),
+                f"Yudisium {academic_start_year}",
+            ),
+            (
+                "⏱️",
+                "Lulus tepat waktu",
+                format_number(on_time_count),
+                f"Yudisium {academic_start_year}",
+            ),
+            (
+                "🏅",
+                "Tepat waktu dan IPK ≥ 3,25",
+                format_number(on_time_ipk_count),
+                f"Yudisium {academic_start_year}",
+            ),
+            (
+                "📈",
+                "Kelulusan tepat waktu",
+                format_percent(on_time_percentage),
+                f"Yudisium {academic_start_year}",
+            ),
+        ]
+
+        for column, item in zip(
+            graduation_cols,
+            graduation_values,
+        ):
+            with column:
+                kpi(*item)
+
+        if academic_yud.empty:
+            st.info(
+                f"Data yudisium tahun {academic_start_year} "
+                "tidak tersedia untuk filter yang dipilih."
+            )
+        else:
+            graduation_status = pd.DataFrame(
+                {
+                    "Kategori": [
+                        "Lulus tepat waktu",
+                        "Tidak tepat waktu",
+                    ],
+                    "Lulusan": [
+                        on_time_count,
+                        max(
+                            graduate_count
+                            - on_time_count,
+                            0,
+                        ),
+                    ],
+                }
+            )
+
+            graduation_ipk = pd.DataFrame(
+                {
+                    "Kategori": [
+                        "Tepat waktu dan IPK ≥ 3,25",
+                        "Tepat waktu dan IPK < 3,25",
+                        "Tidak tepat waktu",
+                    ],
+                    "Lulusan": [
+                        on_time_ipk_count,
+                        max(
+                            on_time_count
+                            - on_time_ipk_count,
+                            0,
+                        ),
+                        max(
+                            graduate_count
+                            - on_time_count,
+                            0,
+                        ),
+                    ],
+                }
+            )
+
+            graduation_col, ipk_col = st.columns(2)
+
+            with graduation_col:
+                figure = px.pie(
+                    graduation_status,
+                    names="Kategori",
+                    values="Lulusan",
+                    hole=0.58,
+                    title=(
+                        "Komposisi Ketepatan Waktu "
+                        f"Yudisium {academic_start_year}"
+                    ),
+                    color_discrete_sequence=[
+                        C["primary"],
+                        C["orange"],
+                    ],
+                )
+                figure.update_layout(
+                    height=430,
+                    paper_bgcolor="white",
+                )
+                figure.update_traces(
+                    textinfo="label+value+percent"
+                )
+
+                st.plotly_chart(
+                    figure,
+                    use_container_width=True,
+                )
+
+            with ipk_col:
+                figure = px.bar(
+                    graduation_ipk,
+                    x="Kategori",
+                    y="Lulusan",
+                    text="Lulusan",
+                    title=(
+                        "Ketepatan Waktu dan IPK Lulusan"
+                    ),
+                    color="Kategori",
+                    color_discrete_sequence=[
+                        C["primary"],
+                        C["yellow"],
+                        C["orange"],
+                    ],
+                )
+                figure.update_layout(
+                    height=430,
+                    paper_bgcolor="white",
+                    plot_bgcolor="white",
+                    showlegend=False,
+                    xaxis_title=None,
+                    yaxis_title="Lulusan",
+                    margin=dict(
+                        l=10,
+                        r=10,
+                        t=55,
+                        b=90,
+                    ),
+                )
+                figure.update_xaxes(
+                    tickangle=-20
+                )
+
+                st.plotly_chart(
+                    figure,
+                    use_container_width=True,
+                )
+
+            section(
+                "Kelulusan per Fakultas",
+                (
+                    "Jumlah lulusan dan persentase kelulusan "
+                    "tepat waktu berdasarkan fakultas."
+                ),
+            )
+
+            graduation_faculty = (
+                academic_yud
+                .groupby(
+                    "fakultas",
+                    dropna=False,
+                )
+                .agg(
+                    Jumlah_Lulusan=("nim", "nunique"),
+                    Lulus_Tepat_Waktu=(
+                        "tepat_waktu_bool",
+                        "sum",
+                    ),
+                    Tepat_Waktu_IPK_325=(
+                        "tepat_waktu_ipk_325",
+                        "sum",
+                    ),
+                    Rata_Rata_IPK=("ipk", "mean"),
+                )
+                .reset_index()
+            )
+
+            jumlah_lulusan_numeric = pd.to_numeric(
+                graduation_faculty["Jumlah_Lulusan"],
+                errors="coerce",
+            )
+
+            lulus_tepat_waktu_numeric = pd.to_numeric(
+                graduation_faculty["Lulus_Tepat_Waktu"],
+                errors="coerce",
+            )
+
+            graduation_faculty[
+                "Kelulusan_Tepat_Waktu"
+            ] = (
+                lulus_tepat_waktu_numeric
+                .div(
+                    jumlah_lulusan_numeric.where(
+                        jumlah_lulusan_numeric.ne(0)
+                    )
+                )
+                .mul(100)
+                .round(2)
+            )
+
+            tepat_waktu_ipk_numeric = pd.to_numeric(
+                graduation_faculty["Tepat_Waktu_IPK_325"],
+                errors="coerce",
+            )
+
+            graduation_faculty[
+                "Tepat_Waktu_IPK_325_Persen"
+            ] = (
+                tepat_waktu_ipk_numeric
+                .div(
+                    jumlah_lulusan_numeric.where(
+                        jumlah_lulusan_numeric.ne(0)
+                    )
+                )
+                .mul(100)
+                .round(2)
+            )
+
+            graduation_faculty[
+                "Rata_Rata_IPK"
+            ] = graduation_faculty[
+                "Rata_Rata_IPK"
+            ].round(2)
+
+            figure = px.bar(
+                graduation_faculty.sort_values(
+                    "Kelulusan_Tepat_Waktu"
+                ),
+                x="Kelulusan_Tepat_Waktu",
+                y="fakultas",
+                orientation="h",
+                text="Kelulusan_Tepat_Waktu",
+                title=(
+                    "Persentase Kelulusan Tepat Waktu "
+                    "per Fakultas"
+                ),
+                color_discrete_sequence=[
+                    C["primary"]
+                ],
+            )
+            figure.update_layout(
+                height=520,
+                paper_bgcolor="white",
+                plot_bgcolor="white",
+                showlegend=False,
+                xaxis_title="Persentase",
+                yaxis_title=None,
+            )
+            figure.update_xaxes(
+                range=[0, 100]
+            )
+            figure.update_traces(
+                texttemplate="%{text:.2f}%",
+                textposition="outside",
+            )
+
+            st.plotly_chart(
+                figure,
+                use_container_width=True,
+            )
+
+            with st.expander(
+                "Lihat detail data yudisium"
+            ):
+                yudisium_columns = [
+                    column
+                    for column in [
+                        "nim",
+                        "nama",
+                        "tanggal_lulus",
+                        "tahun_lulus",
+                        "jenjang_normal",
+                        "fakultas",
+                        "prodi",
+                        "semester",
+                        "ipk",
+                        "tepat_waktu",
+                    ]
+                    if column in academic_yud.columns
+                ]
+
+                st.dataframe(
+                    academic_yud[
+                        yudisium_columns
+                    ],
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "nim": "NIM",
+                        "nama": "Nama",
+                        "tanggal_lulus": (
+                            st.column_config.DateColumn(
+                                "Tanggal Yudisium/Lulus",
+                                format="DD/MM/YYYY",
+                            )
+                        ),
+                        "tahun_lulus": "Tahun Lulus",
+                        "jenjang_normal": "Jenjang",
+                        "fakultas": "Fakultas",
+                        "prodi": "Program Studi",
+                        "semester": "Semester",
+                        "ipk": (
+                            st.column_config.NumberColumn(
+                                "IPK",
+                                format="%.2f",
+                            )
+                        ),
+                        "tepat_waktu": "Tepat Waktu",
+                    },
+                )
+
+        graduation_export_data = (
+            academic_yud[
+                [
+                    column
+                    for column in [
+                        "nim",
+                        "nama",
+                        "tanggal_lulus",
+                        "tahun_lulus",
+                        "jenjang_normal",
+                        "fakultas",
+                        "prodi",
+                        "semester",
+                        "ipk",
+                        "tepat_waktu",
+                    ]
+                    if column in academic_yud.columns
+                ]
+            ]
+            .copy()
+        )
+
+        export_summary_panel(
+            title="Ringkasan Data Kelulusan",
+            subtitle=(
+                f"Dashboard Akademik - "
+                f"Yudisium {academic_start_year}"
+            ),
+            metrics={
+                "Tahun Yudisium": academic_start_year,
+                "Jumlah Lulusan": graduate_count,
+                "Lulus Tepat Waktu": on_time_count,
+                "Tepat Waktu dan IPK >= 3,25": (
+                    on_time_ipk_count
+                ),
+                "Persentase Kelulusan Tepat Waktu": (
+                    format_percent(on_time_percentage)
+                ),
+                "Rata-rata IPK": (
+                    (
+                        f"{academic_yud['ipk'].mean():.2f}"
+                    )
+                    if not academic_yud.empty
+                    and pd.notna(
+                        academic_yud["ipk"].mean()
+                    )
+                    else "-"
+                ),
+            },
+            data=graduation_export_data,
+            filename_prefix="ringkasan_kelulusan",
+            key_prefix="export_kelulusan",
+        )
+
+    with academic_tabs[5]:
         section(
             "Mahasiswa Berkebutuhan Khusus",
             "Profil berdasarkan difabel.xls.",
