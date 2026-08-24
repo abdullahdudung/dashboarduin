@@ -181,6 +181,8 @@ st.markdown(
     .hero {{ padding: 25px 29px; margin-bottom: 18px; color: white; border-radius: 20px; background: linear-gradient(120deg, {C["primary"]}, {C["secondary"]}); box-shadow: 0 12px 35px rgba(0, 105, 92, 0.18); }}
     .hero h1 {{ margin: 0; font-family: "Poppins", sans-serif; font-size: 29px; }}
     .hero p {{ margin: 6px 0 0; font-size: 13px; opacity: 0.88; }}
+    .section-title {{ margin-top: 12px; margin-bottom: 2px; font-family: "Poppins", sans-serif; font-size: 18px; font-weight: 700; }}
+    .section-subtitle {{ margin-bottom: 12px; color: {C["gray"]}; font-size: 12px; }}
     
     .kpi-card, .iku-card, .empty-card {{ padding: 17px 18px; background: white; border: 1px solid {C["border"]}; border-radius: 17px; box-shadow: 0 5px 18px rgba(15, 23, 42, 0.045); }}
     .kpi-card {{ min-height: 143px; }}
@@ -274,6 +276,9 @@ def normalize_level(value: Any) -> str:
 
 def hero(title: str, subtitle: str) -> None:
     st.markdown(f'<div class="hero"><h1>{title}</h1><p>{subtitle}</p></div>', unsafe_allow_html=True)
+
+def section(title: str, subtitle: str) -> None:
+    st.markdown(f'<div class="section-title">{title}</div><div class="section-subtitle">{subtitle}</div>', unsafe_allow_html=True)
 
 def subheading(text: str) -> None:
     st.markdown(
@@ -500,6 +505,7 @@ with main_tabs[0]:
         figure.update_layout(height=470)
         st.plotly_chart(figure, use_container_width=True)
 
+    section("Sorotan Strategis", "Kartu sampel dapat diganti saat sumber data resmi tersedia.")
     sample_cols = st.columns(4)
     sample_values = [
         ("📚", "Rasio dosen-mahasiswa", "1 : 27", "Sampel sementara"),
