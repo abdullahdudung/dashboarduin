@@ -311,9 +311,14 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame,
     mahasiswa["jenjang_normal"] = mahasiswa["jenjang"].fillna("").apply(normalize_level)
     mahasiswa["kota_normal"] = mahasiswa["kota"].apply(normalize_region)
     mahasiswa["asal_daerah_tertinggal"] = mahasiswa["kota_normal"].isin(DAERAH_TERTINGGAL_2025_2029)
+    
+    # Inisialisasi kolom jenis sekolah jika tidak ada di sumber aslinya
+    if "jenis_sekolah" not in mahasiswa.columns:
+        mahasiswa["jenis_sekolah"] = "Tidak diketahui"
 
-    for column in ["fakultas", "jurusan", "jenis_seleksi", "propinsi", "kota"]:
-        mahasiswa[column] = mahasiswa[column].fillna("Tidak diketahui").astype(str).str.strip()
+    for column in ["fakultas", "jurusan", "jenis_seleksi", "propinsi", "kota", "jenis_sekolah"]:
+        if column in mahasiswa.columns:
+            mahasiswa[column] = mahasiswa[column].fillna("Tidak diketahui").astype(str).str.strip()
 
     difabel["tahun_angkatan"] = pd.to_numeric(difabel["tahun_angkatan"], errors="coerce").astype("Int64")
     difabel["status_normal"] = difabel["status"].fillna("").apply(normalize_status)
@@ -375,6 +380,10 @@ faculty_options = sorted(df["fakultas"].dropna().unique().tolist())
 path_options = sorted(set(df["jenis_seleksi"].dropna().astype(str).tolist()) | set(df_pmb["jenis_seleksi"].dropna().astype(str).tolist()))
 province_options = sorted(df["propinsi"].dropna().unique().tolist())
 status_options = sorted(df["status_kategori"].dropna().astype(str).unique().tolist())
+
+# Ambil opsi jenis_sekolah dari dataframe, jika tersedia
+school_options = sorted(df["jenis_sekolah"].dropna().unique().tolist()) if "jenis_sekolah" in df.columns else []
+
 available_iku_years = sorted(set(df["tahun_angkatan"].dropna().astype(int).tolist()) | set(df_yudisium["tahun_lulus"].dropna().astype(int).tolist()), reverse=True)
 
 
@@ -421,10 +430,11 @@ with st.sidebar:
         
         selected_paths = st.multiselect("Jalur Masuk", path_options, key="ac_paths")
         selected_provinces = st.multiselect("Propinsi Asal", province_options, key="ac_provinces")
+        selected_schools = st.multiselect("Jenis Sekolah", school_options, key="ac_schools")
         selected_statuses = st.multiselect("Status Mahasiswa", status_options, key="ac_statuses")
 
         if st.button("↻ Reset Filter Akademik", key="reset_ac_filter"):
-            for k in ["ac_period", "ac_cohorts", "ac_levels", "ac_faculties", "ac_programs", "ac_paths", "ac_provinces", "ac_statuses"]:
+            for k in ["ac_period", "ac_cohorts", "ac_levels", "ac_faculties", "ac_programs", "ac_paths", "ac_provinces", "ac_schools", "ac_statuses"]:
                 st.session_state.pop(k, None)
             st.rerun()
 
@@ -480,7 +490,6 @@ with main_tabs[0]:
         figure.update_layout(height=470)
         st.plotly_chart(figure, use_container_width=True)
 
-    section("Sorotan Strategis", "Kartu sampel dapat diganti saat sumber data resmi tersedia.")
     sample_cols = st.columns(4)
     sample_values = [
         ("📚", "Rasio dosen-mahasiswa", "1 : 27", "Sampel sementara"),
@@ -503,6 +512,7 @@ with main_tabs[1]:
     if selected_programs: academic_df = academic_df[academic_df["jurusan"].isin(selected_programs)]
     if selected_paths: academic_df = academic_df[academic_df["jenis_seleksi"].isin(selected_paths)]
     if selected_provinces: academic_df = academic_df[academic_df["propinsi"].isin(selected_provinces)]
+    if selected_schools: academic_df = academic_df[academic_df["jenis_sekolah"].isin(selected_schools)]
     if selected_statuses: academic_df = academic_df[academic_df["status_kategori"].isin(selected_statuses)]
 
     academic_active = academic_df[academic_df["status_normal"].eq("aktif")]
@@ -619,11 +629,11 @@ with main_tabs[1]:
         st.plotly_chart(figure, use_container_width=True)
 
     st.markdown("**Detail Data Mahasiswa** (Tampilan dibatasi 10 baris pertama)")
-    selected_mhs_columns = [col for col in ["nim", "nama", "fakultas", "jurusan", "jenjang_normal", "tahun_angkatan", "status_kategori", "gender_normal", "propinsi", "jenis_seleksi"] if col in academic_df.columns]
+    selected_mhs_columns = [col for col in ["nim", "nama", "fakultas", "jurusan", "jenjang_normal", "tahun_angkatan", "status_kategori", "gender_normal", "propinsi", "jenis_seleksi", "jenis_sekolah"] if col in academic_df.columns]
     mhs_display_df = academic_df[selected_mhs_columns]
     st.dataframe(
         mhs_display_df.head(10), use_container_width=True, hide_index=True,
-        column_config={"nim": "NIM", "nama": "Nama", "fakultas": "Fakultas", "jurusan": "Program Studi", "jenjang_normal": "Jenjang", "tahun_angkatan": "Angkatan", "status_kategori": "Status", "gender_normal": "L/P", "propinsi": "Propinsi", "jenis_seleksi": "Jalur Seleksi"}
+        column_config={"nim": "NIM", "nama": "Nama", "fakultas": "Fakultas", "jurusan": "Program Studi", "jenjang_normal": "Jenjang", "tahun_angkatan": "Angkatan", "status_kategori": "Status", "gender_normal": "L/P", "propinsi": "Propinsi", "jenis_seleksi": "Jalur Seleksi", "jenis_sekolah": "Jenis Sekolah"}
     )
 
 
@@ -631,7 +641,31 @@ with main_tabs[1]:
     # C. DATA ASAL / JENIS SEKOLAH
     # =========================================================
     subheading("C. Data Asal / Jenis Sekolah")
-    empty_dashboard("Data Asal / Jenis Sekolah", global_year, "🏫")
+
+    if "jenis_sekolah" in academic_df.columns and not academic_df["jenis_sekolah"].eq("Tidak diketahui").all():
+        school_data = academic_df[academic_df["jenis_sekolah"] != "Tidak diketahui"]
+        
+        cols = st.columns(3)
+        with cols[0]: kpi("🏫", "Data Sekolah Terdata", format_number(len(school_data)), "Berdasarkan filter")
+        with cols[1]: kpi("📊", "Jenis Sekolah Terbanyak", school_data["jenis_sekolah"].mode()[0] if not school_data.empty else "-", "Kategori Dominan")
+        with cols[2]: kpi("📈", "Jumlah Kategori Sekolah", format_number(school_data["jenis_sekolah"].nunique()), "Variasi Jenis")
+
+        if not school_data.empty:
+            school_summary = school_data["jenis_sekolah"].value_counts().rename_axis("Jenis Sekolah").reset_index(name="Jumlah Mahasiswa")
+            
+            sch_col1, sch_col2 = st.columns([1, 1])
+            with sch_col1:
+                figure = px.pie(school_summary, names="Jenis Sekolah", values="Jumlah Mahasiswa", hole=0.58, title="Komposisi Jenis Sekolah", color_discrete_sequence=[C["primary"], C["orange"], C["yellow"], C["blue"], C["gray"]])
+                figure.update_layout(height=430, paper_bgcolor="white", legend=dict(orientation="h", y=-0.15))
+                figure.update_traces(textinfo="label+value+percent")
+                st.plotly_chart(figure, use_container_width=True)
+            
+            with sch_col2:
+                st.markdown("<br>**Detail Data Jenis Sekolah** (Tampilan dibatasi 10 baris pertama)", unsafe_allow_html=True)
+                st.dataframe(school_summary.head(10), use_container_width=True, hide_index=True)
+    else:
+        empty_dashboard("Data Asal / Jenis Sekolah", global_year, "🏫")
+        st.info("Catatan: Kolom 'jenis_sekolah' belum ditemukan di sumber data Anda atau isinya kosong. Grafik akan otomatis muncul jika datanya tersedia.")
 
 
     # =========================================================
@@ -648,7 +682,7 @@ with main_tabs[1]:
     cols = st.columns(3)
     with cols[0]: kpi("♿", "Total mahasiswa", format_number(filtered_difabel["nim"].nunique()), "NIM unik")
     with cols[1]: kpi("✅", "Status aktif", format_number(filtered_difabel.loc[filtered_difabel["status_normal"].eq("aktif"), "nim"].nunique()), "")
-    with cols[2]: kpi("📚", "Program studi", format_number(filtered_difabel["jurusan"].nunique()), "")
+    with cols[2]: kpi("📚", "Program Studi", format_number(filtered_difabel["jurusan"].nunique()), "")
 
     if not filtered_difabel.empty:
         need_df = filtered_difabel["kebutuhan_khusus"].value_counts().rename_axis("Kebutuhan Khusus").reset_index(name="Mahasiswa").sort_values("Mahasiswa")
