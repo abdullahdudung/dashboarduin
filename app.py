@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from io import BytesIO
 import re
 from typing import Any
 
@@ -153,6 +152,31 @@ st.markdown(
         color: #00695C;
     }}
 
+    /* ======= RADIO BUTTON SEBAGAI SUB-TABS AKADEMIK ======= */
+    div.row-widget.stRadio > div[role="radiogroup"] {{
+        flex-direction: row; flex-wrap: wrap; gap: 8px;
+        border-bottom: 2px solid #E2E8F0; padding-bottom: 10px;
+    }}
+    div.row-widget.stRadio > div[role="radiogroup"] > label {{
+        background: white; border: 1px solid #CBD5E1; border-radius: 20px;
+        padding: 6px 16px; cursor: pointer; transition: all 0.2s;
+    }}
+    div.row-widget.stRadio > div[role="radiogroup"] > label:hover {{
+        background: #F1F5F9; border-color: #94A3B8;
+    }}
+    div.row-widget.stRadio > div[role="radiogroup"] > label[data-checked="true"] {{
+        background: #00695C; border-color: #00695C;
+    }}
+    div.row-widget.stRadio > div[role="radiogroup"] > label[data-checked="true"] * {{
+        color: white !important; -webkit-text-fill-color: white !important;
+    }}
+    div.row-widget.stRadio > div[role="radiogroup"] > label > div:first-child {{
+        display: none; /* Sembunyikan bulat radio */
+    }}
+    div.row-widget.stRadio > div[role="radiogroup"] > label > div:last-child {{
+        margin-left: 0; font-weight: 600; font-size: 13px; color: #475569;
+    }}
+
     /* ======= KARTU INFO ======= */
     .hero {{ padding: 25px 29px; margin-bottom: 18px; color: white; border-radius: 20px; background: linear-gradient(120deg, {C["primary"]}, {C["secondary"]}); box-shadow: 0 12px 35px rgba(0, 105, 92, 0.18); }}
     .hero h1 {{ margin: 0; font-family: "Poppins", sans-serif; font-size: 29px; }}
@@ -279,86 +303,6 @@ def iku_card(code: str, title: str, value: float | None, formula: str, note: str
 
 def empty_dashboard(title: str, year: int, icon: str) -> None:
     st.markdown(f'<div class="empty-card"><div style="font-size:42px">{icon}</div><h3>Konten sedang disiapkan</h3><p>Halaman ini sudah memiliki filter waktu sinkron. Data dan KPI akan dimuat saat tersedia.</p></div>', unsafe_allow_html=True)
-
-def _safe_export_value(value: Any) -> str:
-    if pd.isna(value): return "-"
-    if isinstance(value, pd.Timestamp): return value.strftime("%d/%m/%Y")
-    if isinstance(value, float): return f"{value:,.2f}"
-    return str(value)
-
-def create_excel_export(title: str, metrics: dict[str, Any], data: pd.DataFrame) -> bytes:
-    output = BytesIO()
-    metric_df = pd.DataFrame({"Keterangan": list(metrics.keys()), "Nilai": list(metrics.values())})
-    export_data = data.copy()
-    for column in export_data.columns:
-        if pd.api.types.is_datetime64_any_dtype(export_data[column]):
-            export_data[column] = export_data[column].dt.tz_localize(None)
-
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        metric_df.to_excel(writer, sheet_name="Ringkasan", index=False, startrow=2)
-        export_data.to_excel(writer, sheet_name="Data", index=False)
-        summary_sheet = writer.book["Ringkasan"]
-        summary_sheet["A1"] = title
-        summary_sheet["A1"].font = summary_sheet["A1"].font.copy(bold=True, size=14)
-        for worksheet in writer.book.worksheets:
-            worksheet.freeze_panes = "A2"
-            for cells in worksheet.columns:
-                width = max(len(str(cell.value) if cell.value is not None else "") for cell in cells)
-                worksheet.column_dimensions[cells[0].column_letter].width = min(max(width + 2, 12), 42)
-    return output.getvalue()
-
-def create_pdf_export(title: str, subtitle: str, metrics: dict[str, Any], data: pd.DataFrame) -> bytes:
-    from reportlab.lib import colors
-    from reportlab.lib.enums import TA_CENTER
-    from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-    from reportlab.lib.units import mm
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-
-    output = BytesIO()
-    document = SimpleDocTemplate(output, pagesize=landscape(A4), rightMargin=12 * mm, leftMargin=12 * mm, topMargin=12 * mm, bottomMargin=12 * mm, title=title)
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle("ReportTitle", parent=styles["Title"], alignment=TA_CENTER, fontName="Helvetica-Bold", fontSize=16, leading=20, textColor=colors.HexColor("#00695C"))
-    subtitle_style = ParagraphStyle("ReportSubtitle", parent=styles["Normal"], alignment=TA_CENTER, fontSize=9, leading=12, textColor=colors.HexColor("#64748B"))
-    cell_style = ParagraphStyle("Cell", parent=styles["BodyText"], fontSize=6.5, leading=8)
-    header_style = ParagraphStyle("HeaderCell", parent=cell_style, fontName="Helvetica-Bold", textColor=colors.white)
-
-    story = [Paragraph(title, title_style), Paragraph(subtitle, subtitle_style), Spacer(1, 7 * mm)]
-    metric_rows = [[Paragraph("Keterangan", header_style), Paragraph("Nilai", header_style)]]
-    for label, value in metrics.items(): metric_rows.append([Paragraph(_safe_export_value(label), cell_style), Paragraph(_safe_export_value(value), cell_style)])
-
-    metric_table = Table(metric_rows, colWidths=[90 * mm, 70 * mm], repeatRows=1, hAlign="CENTER")
-    metric_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#00695C")), ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#CBD5E1")), ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#F8FAFC")), ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 5), ("RIGHTPADDING", (0, 0), (-1, -1), 5)]))
-    story.extend([metric_table, Spacer(1, 8 * mm), Paragraph("Tabel Data", styles["Heading2"]), Spacer(1, 3 * mm)])
-
-    export_data = data.copy()
-    if export_data.empty: story.append(Paragraph("Tidak ada data sesuai filter yang dipilih.", styles["Normal"]))
-    else:
-        max_columns = 10
-        if len(export_data.columns) > max_columns: export_data = export_data.iloc[:, :max_columns]
-        headers = [Paragraph(_safe_export_value(column), header_style) for column in export_data.columns]
-        table_rows = [headers]
-        for row in export_data.itertuples(index=False, name=None): table_rows.append([Paragraph(_safe_export_value(value), cell_style) for value in row])
-        available_width = landscape(A4)[0] - 24 * mm
-        column_width = available_width / max(len(export_data.columns), 1)
-        data_table = Table(table_rows, colWidths=[column_width for _ in export_data.columns], repeatRows=1)
-        data_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#00695C")), ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#CBD5E1")), ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]), ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 3), ("RIGHTPADDING", (0, 0), (-1, -1), 3)]))
-        story.append(data_table)
-
-    document.build(story)
-    return output.getvalue()
-
-def export_data_panel(title: str, data: pd.DataFrame, filename_prefix: str, key_prefix: str) -> None:
-    st.markdown("<br>", unsafe_allow_html=True)
-    export_cols = st.columns([1, 1, 6])
-    metrics_context = {"Status Data": "Mengikuti filter di panel samping."}
-    
-    with export_cols[0]:
-        excel_bytes = create_excel_export(title, metrics_context, data)
-        st.download_button(label="⬇ Unduh Excel", data=excel_bytes, file_name=f"{filename_prefix}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key=f"{key_prefix}_excel", use_container_width=True)
-    with export_cols[1]:
-        pdf_bytes = create_pdf_export(title, "Export Detail Data", metrics_context, data)
-        st.download_button(label="⬇ Unduh PDF", data=pdf_bytes, file_name=f"{filename_prefix}.pdf", mime="application/pdf", key=f"{key_prefix}_pdf", use_container_width=True)
 
 
 # ============================================================
@@ -580,8 +524,6 @@ with main_tabs[1]:
     if selected_provinces: academic_df = academic_df[academic_df["propinsi"].isin(selected_provinces)]
     if selected_statuses: academic_df = academic_df[academic_df["status_kategori"].isin(selected_statuses)]
 
-    academic_active = academic_df[academic_df["status_normal"].eq("aktif")]
-
 
     # =========================================================
     # A. DATA AKREDITASI PROGRAM STUDI
@@ -632,9 +574,9 @@ with main_tabs[1]:
         .drop(columns=["prioritas_urutan"])
     )
 
-    st.markdown("**Daftar dan Masa Berlaku Akreditasi Program Studi** (Tampilan dibatasi 20 baris pertama)")
+    st.markdown("**Daftar dan Masa Berlaku Akreditasi Program Studi** (Tampilan dibatasi 10 baris pertama)")
     st.dataframe(
-        accreditation_table.head(20), use_container_width=True, hide_index=True,
+        accreditation_table.head(10), use_container_width=True, hide_index=True,
         column_config={
             "jenjang_normal": "Jenjang", "fakultas": "Fakultas", "prodi": "Program Studi", "peringkat": "Peringkat", "no_sk_akreditasi": "Nomor SK",
             "tanggal_sk_akreditasi": st.column_config.DateColumn("Tanggal SK", format="DD/MM/YYYY"),
@@ -644,7 +586,6 @@ with main_tabs[1]:
             "sisa_hari": st.column_config.NumberColumn("Sisa Hari", format="%d"),
         },
     )
-    export_data_panel("Data Akreditasi Program Studi", accreditation_table, "akreditasi_program_studi", "exp_akreditasi")
 
 
     # =========================================================
@@ -712,16 +653,13 @@ with main_tabs[1]:
         figure.update_layout(height=500, paper_bgcolor="white", margin=dict(l=5, r=5, t=55, b=5), coloraxis_colorbar_title="Mahasiswa")
         st.plotly_chart(figure, use_container_width=True)
 
-    st.markdown("**Detail Data Mahasiswa** (Tampilan dibatasi 20 baris pertama)")
-    
+    st.markdown("**Detail Data Mahasiswa** (Tampilan dibatasi 10 baris pertama)")
     selected_mhs_columns = [col for col in ["nim", "nama", "fakultas", "jurusan", "jenjang_normal", "tahun_angkatan", "status_kategori", "gender_normal", "propinsi", "jenis_seleksi"] if col in academic_df.columns]
     mhs_display_df = academic_df[selected_mhs_columns]
-
     st.dataframe(
-        mhs_display_df.head(20), use_container_width=True, hide_index=True,
+        mhs_display_df.head(10), use_container_width=True, hide_index=True,
         column_config={"nim": "NIM", "nama": "Nama", "fakultas": "Fakultas", "jurusan": "Program Studi", "jenjang_normal": "Jenjang", "tahun_angkatan": "Angkatan", "status_kategori": "Status", "gender_normal": "L/P", "propinsi": "Propinsi", "jenis_seleksi": "Jalur Seleksi"}
     )
-    export_data_panel("Data Mahasiswa Terintegrasi", mhs_display_df, "data_mahasiswa", "exp_mhs")
 
 
     # =========================================================
@@ -765,9 +703,8 @@ with main_tabs[1]:
     pmb_lulus_numeric = pd.to_numeric(pmb_summary_export["Lulus_Seleksi"], errors="coerce")
     pmb_summary_export["Yield_Rate"] = pmb_daftar_ulang_numeric.div(pmb_lulus_numeric.where(pmb_lulus_numeric.ne(0))).mul(100).round(2)
 
-    st.markdown("**Statistik PMB Berdasarkan Filter** (Tampilan dibatasi 20 baris pertama)")
-    st.dataframe(pmb_summary_export.head(20), use_container_width=True, hide_index=True)
-    export_data_panel("Statistik Penerimaan Mahasiswa Baru", pmb_summary_export, "data_statistik_pmb", "exp_pmb")
+    st.markdown("**Statistik PMB Berdasarkan Filter** (Tampilan dibatasi 10 baris pertama)")
+    st.dataframe(pmb_summary_export.head(10), use_container_width=True, hide_index=True)
 
 
     # =========================================================
@@ -832,12 +769,11 @@ with main_tabs[1]:
         yudisium_columns = [c for c in ["nim", "nama", "tanggal_lulus", "tahun_lulus", "jenjang_normal", "fakultas", "prodi", "semester", "ipk", "tepat_waktu"] if c in academic_yud.columns]
         graduation_export_data = academic_yud[yudisium_columns].copy()
 
-        st.markdown("**Detail Data Kelulusan** (Tampilan dibatasi 20 baris pertama)")
+        st.markdown("**Detail Data Kelulusan** (Tampilan dibatasi 10 baris pertama)")
         st.dataframe(
-            graduation_export_data.head(20), use_container_width=True, hide_index=True, 
+            graduation_export_data.head(10), use_container_width=True, hide_index=True, 
             column_config={"nim": "NIM", "nama": "Nama", "tanggal_lulus": st.column_config.DateColumn("Tanggal Yudisium/Lulus", format="DD/MM/YYYY"), "tahun_lulus": "Tahun Lulus", "jenjang_normal": "Jenjang", "fakultas": "Fakultas", "prodi": "Program Studi", "semester": "Semester", "ipk": st.column_config.NumberColumn("IPK", format="%.2f"), "tepat_waktu": "Tepat Waktu"}
         )
-        export_data_panel("Data Mahasiswa Kelulusan", graduation_export_data, "data_mahasiswa_kelulusan", "exp_yud")
 
 
     # =========================================================
@@ -861,12 +797,9 @@ with main_tabs[1]:
         figure = px.bar(need_df, x="Mahasiswa", y="Kebutuhan Khusus", orientation="h", title="Jenis Kebutuhan Khusus", color_discrete_sequence=[C["primary"]])
         st.plotly_chart(figure, use_container_width=True)
 
-    st.markdown("**Detail Mahasiswa Kebutuhan Khusus** (Tampilan dibatasi 20 baris pertama)")
-    
+    st.markdown("**Detail Mahasiswa Kebutuhan Khusus** (Tampilan dibatasi 10 baris pertama)")
     difabel_export_cols = [c for c in ["nim", "nama", "fakultas", "jurusan", "tahun_angkatan", "kebutuhan_khusus", "status_normal", "gender_normal", "propinsi"] if c in filtered_difabel.columns]
-    
-    st.dataframe(filtered_difabel[difabel_export_cols].head(20), use_container_width=True, hide_index=True)
-    export_data_panel("Data Mahasiswa Kebutuhan Khusus", filtered_difabel[difabel_export_cols], "data_mahasiswa_kebutuhan_khusus", "exp_difabel")
+    st.dataframe(filtered_difabel[difabel_export_cols].head(10), use_container_width=True, hide_index=True)
 
 
     # =========================================================
@@ -881,9 +814,92 @@ with main_tabs[1]:
     with cols[1]: kpi("🏘️", "Kabupaten teridentifikasi", format_number(disadvantaged["kota_normal"].nunique()), "")
     with cols[2]: kpi("🌍", "Propinsi", format_number(disadvantaged["propinsi"].nunique()), "")
 
-    st.markdown("**Detail Mahasiswa Daerah Tertinggal** (Tampilan dibatasi 20 baris pertama)")
-    
+    st.markdown("**Detail Mahasiswa Daerah Tertinggal** (Tampilan dibatasi 10 baris pertama)")
     dt_export_cols = [c for c in ["nim", "nama", "fakultas", "jurusan", "tahun_angkatan", "status_kategori", "gender_normal", "kota_normal", "propinsi"] if c in disadvantaged.columns]
-    
-    st.dataframe(disadvantaged[dt_export_cols].head(20), use_container_width=True, hide_index=True)
-    export_data_panel("Data Mahasiswa Daerah Tertinggal", disadvantaged[dt_export_cols], "data_mahasiswa_daerah_tertinggal", "exp_dt")
+    st.dataframe(disadvantaged[dt_export_cols].head(10), use_container_width=True, hide_index=True)
+
+
+# --- 3 S/D 8. DASHBOARD KOSONG ---
+with main_tabs[2]: hero("Dashboard SDM", "Kerangka dashboard sumber daya manusia sedang disiapkan."); empty_dashboard("Dashboard SDM", global_year, "👩‍🏫")
+with main_tabs[3]: hero("Dashboard Keuangan", "Kerangka dashboard keuangan sedang disiapkan."); empty_dashboard("Dashboard Keuangan", global_year, "💰")
+with main_tabs[4]: hero("Dashboard Aset", "Kerangka dashboard aset sedang disiapkan."); empty_dashboard("Dashboard Aset", global_year, "🏢")
+with main_tabs[5]: hero("Dashboard Riset", "Kerangka dashboard riset dan publikasi sedang disiapkan."); empty_dashboard("Dashboard Riset", global_year, "🔬")
+with main_tabs[6]: hero("Dashboard Alumni", "Kerangka dashboard alumni dan tracer study sedang disiapkan."); empty_dashboard("Dashboard Alumni", global_year, "🎓")
+with main_tabs[7]: hero("Dashboard Prestasi Mahasiswa", "Kerangka dashboard prestasi akademik dan nonakademik mahasiswa sedang disiapkan."); empty_dashboard("Dashboard Prestasi Mahasiswa", global_year, "🏆")
+with main_tabs[8]: hero("Dashboard Paperless (PLO)", "Kerangka dashboard layanan dan proses administrasi paperless sedang disiapkan."); empty_dashboard("Dashboard Paperless (PLO)", global_year, "📄")
+
+# --- 9. DASHBOARD IKU ---
+with main_tabs[9]:
+    hero("Dashboard Capaian IKU", "Capaian indikator berdasarkan sumber data yang tersedia (Berbasis Filter Tahun Global).")
+
+    iku_sub_section = st.radio(
+        "Sub-Menu IKU",
+        ["IKU Akademik", "IKU SDM", "IKU Keuangan", "IKU Aset", "IKU Riset", "IKU Alumni"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    if iku_sub_section == "IKU Akademik":
+        new_t = int(df["tahun_angkatan"].eq(global_year).sum())
+        new_previous = int(df["tahun_angkatan"].eq(global_year - 1).sum())
+        iku_01_01 = growth(new_t, new_previous)
+
+        new_students = df[df["tahun_angkatan"].eq(global_year)]
+        disadvantaged_count = int(new_students["asal_daerah_tertinggal"].sum())
+        iku_01_07 = percentage(disadvantaged_count, len(new_students))
+
+        dif_t = int(df_difabel["tahun_angkatan"].eq(global_year).sum())
+        dif_previous = int(df_difabel["tahun_angkatan"].eq(global_year - 1).sum())
+        iku_02_01 = growth(dif_t, dif_previous)
+
+        yud_year = df_yudisium[df_yudisium["tahun_lulus"].eq(global_year)]
+        graduate_count = yud_year["nim"].nunique()
+        on_time_count = yud_year.loc[yud_year["tepat_waktu_bool"], "nim"].nunique()
+        on_time_ipk_count = yud_year.loc[yud_year["tepat_waktu_ipk_325"], "nim"].nunique()
+
+        iku_04_1 = percentage(on_time_ipk_count, graduate_count)
+        iku_04_3 = percentage(on_time_count, graduate_count)
+
+        pmb_years = sorted(df_pmb["tahun"].dropna().astype(int).unique().tolist())
+        iku_pmb_year = global_year if global_year in pmb_years else max(pmb_years)
+        pmb_year_df = df_pmb[df_pmb["tahun"].eq(iku_pmb_year)]
+
+        total_lulus = float(pmb_year_df["lulus_seleksi"].sum())
+        total_daftar = float(pmb_year_df["daftar_ulang"].sum())
+        iku_35_54 = percentage(total_daftar, total_lulus)
+
+        if iku_pmb_year != global_year:
+            st.warning(f"Data PMB tahun {global_year} belum tersedia. IKU-35-54 memakai data PMB terbaru {iku_pmb_year}.")
+
+        iku_rows = [
+            ("IKU-01-01", "Persentase peningkatan mahasiswa pada PTK", iku_01_01, "(Mahasiswa baru t − mahasiswa baru t−1) ÷ mahasiswa baru t−1 × 100%", f"{new_t} dibanding {new_previous}.", ("Tersedia" if iku_01_01 is not None else "Sebagian")),
+            ("IKU-01-05", "Persentase lulusan pesantren yang ditampung", None, "Mahasiswa baru lulusan pesantren ÷ total mahasiswa baru × 100%", "Belum tersedia data asal pesantren.", "Belum tersedia"),
+            ("IKU-01-07", "Persentase mahasiswa baru dari daerah tertinggal", iku_01_07, "Mahasiswa baru daerah tertinggal ÷ total mahasiswa baru × 100%", f"{disadvantaged_count} dari {len(new_students)} mahasiswa baru.", "Tersedia"),
+            ("IKU-02-01", "Persentase peningkatan mahasiswa berkebutuhan khusus", iku_02_01, "(Mahasiswa kebutuhan khusus t − t−1) ÷ mahasiswa kebutuhan khusus t−1 × 100%", f"{dif_t} dibanding {dif_previous}.", ("Tersedia" if iku_02_01 is not None else "Sebagian")),
+            ("IKU-04-1", "Persentase mahasiswa lulus tepat waktu dengan IPK ≥ 3,25", iku_04_1, "Lulusan tepat waktu dengan IPK ≥ 3,25 ÷ seluruh lulusan × 100%", f"{on_time_ipk_count} dari {graduate_count} lulusan.", ("Tersedia" if iku_04_1 is not None else "Belum tersedia")),
+            ("IKU-04-3", "Persentase kelulusan tepat waktu", iku_04_3, "Lulusan tepat waktu ÷ seluruh lulusan × 100%", f"{on_time_count} dari {graduate_count} lulusan.", ("Tersedia" if iku_04_3 is not None else "Belum tersedia")),
+            ("IKU-35-54", "Yield Rate Mahasiswa Baru", iku_35_54, "Daftar ulang ÷ lulus seleksi × 100%", f"PMB {iku_pmb_year}: {format_number(total_daftar)} dari {format_number(total_lulus)}.", ("Tersedia" if iku_35_54 is not None else "Belum tersedia")),
+        ]
+
+        for start in range(0, len(iku_rows), 3):
+            columns = st.columns(3)
+            for column, row in zip(columns, iku_rows[start:start + 3]):
+                with column: iku_card(*row)
+
+        section("Ketersediaan Dashboard Profil", "Komponen yang mendukung IKU-48-06.")
+        profile_readiness = pd.DataFrame([
+            ["Total mahasiswa", "Tersedia"], ["Jenis kelamin per universitas", "Tersedia"], ["Mahasiswa per fakultas", "Tersedia"],
+            ["Mahasiswa per program studi", "Tersedia"], ["Mahasiswa per jenjang", "Tersedia"], ["Mahasiswa per propinsi", "Tersedia"],
+            ["Profil alumni", "Belum tersedia"],
+        ], columns=["Komponen", "Status"])
+        st.dataframe(profile_readiness, use_container_width=True, hide_index=True)
+
+    elif iku_sub_section == "IKU SDM": empty_dashboard("IKU SDM", global_year, "👩‍🏫")
+    elif iku_sub_section == "IKU Keuangan": empty_dashboard("IKU Keuangan", global_year, "💰")
+    elif iku_sub_section == "IKU Aset": empty_dashboard("IKU Aset", global_year, "🏢")
+    elif iku_sub_section == "IKU Riset": empty_dashboard("IKU Riset", global_year, "🔬")
+    elif iku_sub_section == "IKU Alumni": empty_dashboard("IKU Alumni", global_year, "🎓")
+
+st.markdown("<br>", unsafe_allow_html=True)
+st.caption("Sumber data: v_mahasiswa.xls, difabel.xls, vs_yudisium_mahasiswa.xls, vs_rekap_pmb.xls, dan akreditasiprodi.xls.")
