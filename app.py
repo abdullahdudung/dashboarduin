@@ -152,31 +152,6 @@ st.markdown(
         color: #00695C;
     }}
 
-    /* ======= RADIO BUTTON SEBAGAI SUB-TABS AKADEMIK ======= */
-    div.row-widget.stRadio > div[role="radiogroup"] {{
-        flex-direction: row; flex-wrap: wrap; gap: 8px;
-        border-bottom: 2px solid #E2E8F0; padding-bottom: 10px;
-    }}
-    div.row-widget.stRadio > div[role="radiogroup"] > label {{
-        background: white; border: 1px solid #CBD5E1; border-radius: 20px;
-        padding: 6px 16px; cursor: pointer; transition: all 0.2s;
-    }}
-    div.row-widget.stRadio > div[role="radiogroup"] > label:hover {{
-        background: #F1F5F9; border-color: #94A3B8;
-    }}
-    div.row-widget.stRadio > div[role="radiogroup"] > label[data-checked="true"] {{
-        background: #00695C; border-color: #00695C;
-    }}
-    div.row-widget.stRadio > div[role="radiogroup"] > label[data-checked="true"] * {{
-        color: white !important; -webkit-text-fill-color: white !important;
-    }}
-    div.row-widget.stRadio > div[role="radiogroup"] > label > div:first-child {{
-        display: none; /* Sembunyikan bulat radio */
-    }}
-    div.row-widget.stRadio > div[role="radiogroup"] > label > div:last-child {{
-        margin-left: 0; font-weight: 600; font-size: 13px; color: #475569;
-    }}
-
     /* ======= KARTU INFO ======= */
     .hero {{ padding: 25px 29px; margin-bottom: 18px; color: white; border-radius: 20px; background: linear-gradient(120deg, {C["primary"]}, {C["secondary"]}); box-shadow: 0 12px 35px rgba(0, 105, 92, 0.18); }}
     .hero h1 {{ margin: 0; font-family: "Poppins", sans-serif; font-size: 29px; }}
@@ -505,6 +480,7 @@ with main_tabs[0]:
         figure.update_layout(height=470)
         st.plotly_chart(figure, use_container_width=True)
 
+    section("Sorotan Strategis", "Kartu sampel dapat diganti saat sumber data resmi tersedia.")
     sample_cols = st.columns(4)
     sample_values = [
         ("📚", "Rasio dosen-mahasiswa", "1 : 27", "Sampel sementara"),
@@ -530,323 +506,307 @@ with main_tabs[1]:
     if selected_statuses: academic_df = academic_df[academic_df["status_kategori"].isin(selected_statuses)]
 
     academic_active = academic_df[academic_df["status_normal"].eq("aktif")]
-
-    academic_section = st.radio(
-        "Sub-Menu Akademik",
-        ["PMB", "Mahasiswa", "Asal/Jenis Sekolah", "Kebutuhan Khusus", "Daerah Tertinggal", "Kelulusan", "Program Studi"],
-        horizontal=True,
-        label_visibility="collapsed"
-    )
-    st.markdown("<br>", unsafe_allow_html=True)
+    academic_start_year = int(academic_period.split("/")[0])
 
 
     # =========================================================
     # A. DATA PMB
     # =========================================================
-    if academic_section == "PMB":
-        subheading("A. Data Penerimaan Mahasiswa Baru (PMB)")
+    subheading("A. Data Penerimaan Mahasiswa Baru (PMB)")
 
-        academic_start_year = int(academic_period.split("/")[0])
-        pmb_years = sorted(df_pmb["tahun"].dropna().astype(int).unique().tolist())
-        academic_pmb_year = academic_start_year if academic_start_year in pmb_years else max(pmb_years)
-        academic_pmb = df_pmb[df_pmb["tahun"].eq(academic_pmb_year)].copy()
+    pmb_years = sorted(df_pmb["tahun"].dropna().astype(int).unique().tolist())
+    academic_pmb_year = academic_start_year if academic_start_year in pmb_years else max(pmb_years)
+    academic_pmb = df_pmb[df_pmb["tahun"].eq(academic_pmb_year)].copy()
 
-        if selected_levels: academic_pmb = academic_pmb[academic_pmb["jenjang_normal"].isin(selected_levels)]
-        if selected_faculties: academic_pmb = academic_pmb[academic_pmb["fakultas"].isin(selected_faculties)]
-        if selected_programs: academic_pmb = academic_pmb[academic_pmb["jurusan"].isin(selected_programs)]
-        if selected_paths: academic_pmb = academic_pmb[academic_pmb["jenis_seleksi"].isin(selected_paths)]
+    if selected_levels: academic_pmb = academic_pmb[academic_pmb["jenjang_normal"].isin(selected_levels)]
+    if selected_faculties: academic_pmb = academic_pmb[academic_pmb["fakultas"].isin(selected_faculties)]
+    if selected_programs: academic_pmb = academic_pmb[academic_pmb["jurusan"].isin(selected_programs)]
+    if selected_paths: academic_pmb = academic_pmb[academic_pmb["jenis_seleksi"].isin(selected_paths)]
 
-        if academic_pmb_year != academic_start_year:
-            st.warning(f"Data PMB tahun {academic_start_year} belum tersedia. Data ini memakai tahun terbaru {academic_pmb_year}.")
+    if academic_pmb_year != academic_start_year:
+        st.warning(f"Data PMB tahun {academic_start_year} belum tersedia. Data ini memakai tahun terbaru {academic_pmb_year}.")
 
-        total_peminat = float(academic_pmb["peminat"].sum())
-        total_lulus = float(academic_pmb["lulus_seleksi"].sum())
-        total_daftar = float(academic_pmb["daftar_ulang"].sum())
+    total_peminat = float(academic_pmb["peminat"].sum())
+    total_lulus = float(academic_pmb["lulus_seleksi"].sum())
+    total_daftar = float(academic_pmb["daftar_ulang"].sum())
 
-        cols = st.columns(4)
-        pmb_values = [
-            ("📝", "Peminat", format_number(total_peminat)),
-            ("✅", "Lulus seleksi", format_number(total_lulus)),
-            ("📋", "Daftar ulang", format_number(total_daftar)),
-            ("🎯", "Yield rate", format_percent(percentage(total_daftar, total_lulus))),
-        ]
-        for column, item in zip(cols, pmb_values):
-            with column: kpi(item[0], item[1], item[2], f"PMB {academic_pmb_year}")
+    cols = st.columns(4)
+    pmb_values = [
+        ("📝", "Peminat", format_number(total_peminat)),
+        ("✅", "Lulus seleksi", format_number(total_lulus)),
+        ("📋", "Daftar ulang", format_number(total_daftar)),
+        ("🎯", "Yield rate", format_percent(percentage(total_daftar, total_lulus))),
+    ]
+    for column, item in zip(cols, pmb_values):
+        with column: kpi(item[0], item[1], item[2], f"PMB {academic_pmb_year}")
 
-        funnel = go.Figure(go.Funnel(y=["Peminat", "Lulus Seleksi", "Daftar Ulang"], x=[total_peminat, total_lulus, total_daftar], textinfo="value+percent initial"))
-        funnel.update_layout(title=f"Funnel PMB {academic_pmb_year}")
-        st.plotly_chart(funnel, use_container_width=True)
+    funnel = go.Figure(go.Funnel(y=["Peminat", "Lulus Seleksi", "Daftar Ulang"], x=[total_peminat, total_lulus, total_daftar], textinfo="value+percent initial"))
+    funnel.update_layout(title=f"Funnel PMB {academic_pmb_year}")
+    st.plotly_chart(funnel, use_container_width=True)
 
-        pmb_summary_export = academic_pmb.groupby(["fakultas", "jurusan", "jenjang_normal", "jenis_seleksi"], dropna=False).agg(Peminat=("peminat", "sum"), Lulus_Seleksi=("lulus_seleksi", "sum"), Daftar_Ulang=("daftar_ulang", "sum")).reset_index()
-        pmb_daftar_ulang_numeric = pd.to_numeric(pmb_summary_export["Daftar_Ulang"], errors="coerce")
-        pmb_lulus_numeric = pd.to_numeric(pmb_summary_export["Lulus_Seleksi"], errors="coerce")
-        pmb_summary_export["Yield_Rate"] = pmb_daftar_ulang_numeric.div(pmb_lulus_numeric.where(pmb_lulus_numeric.ne(0))).mul(100).round(2)
+    pmb_summary_export = academic_pmb.groupby(["fakultas", "jurusan", "jenjang_normal", "jenis_seleksi"], dropna=False).agg(Peminat=("peminat", "sum"), Lulus_Seleksi=("lulus_seleksi", "sum"), Daftar_Ulang=("daftar_ulang", "sum")).reset_index()
+    pmb_daftar_ulang_numeric = pd.to_numeric(pmb_summary_export["Daftar_Ulang"], errors="coerce")
+    pmb_lulus_numeric = pd.to_numeric(pmb_summary_export["Lulus_Seleksi"], errors="coerce")
+    pmb_summary_export["Yield_Rate"] = pmb_daftar_ulang_numeric.div(pmb_lulus_numeric.where(pmb_lulus_numeric.ne(0))).mul(100).round(2)
 
-        st.markdown("**Statistik PMB Berdasarkan Filter** (Tampilan dibatasi 10 baris pertama)")
-        st.dataframe(pmb_summary_export.head(10), use_container_width=True, hide_index=True)
+    st.markdown("**Statistik PMB Berdasarkan Filter** (Tampilan dibatasi 10 baris pertama)")
+    st.dataframe(pmb_summary_export.head(10), use_container_width=True, hide_index=True)
 
 
     # =========================================================
     # B. DATA MAHASISWA
     # =========================================================
-    elif academic_section == "Mahasiswa":
-        subheading("B. Data Mahasiswa")
-        
-        status_counts = academic_df["status_kategori"].fillna("Tidak Diketahui").value_counts().to_dict()
-        preferred_status_order = ["Aktif", "Lulus", "Cuti", "Tidak Aktif", "DO/Putus Studi", "Mengundurkan Diri", "Meninggal", "Skorsing", "Pindah/Transfer", "Tidak Diketahui"]
-        status_icon_map = {"Aktif": "✅", "Lulus": "🎓", "Cuti": "⏸️", "Tidak Aktif": "🚫", "DO/Putus Studi": "⚠️", "Mengundurkan Diri": "↩️", "Meninggal": "🕊️", "Skorsing": "⛔", "Pindah/Transfer": "🔄", "Tidak Diketahui": "❓"}
+    subheading("B. Data Mahasiswa")
+    
+    status_counts = academic_df["status_kategori"].fillna("Tidak Diketahui").value_counts().to_dict()
+    preferred_status_order = ["Aktif", "Lulus", "Cuti", "Tidak Aktif", "DO/Putus Studi", "Mengundurkan Diri", "Meninggal", "Skorsing", "Pindah/Transfer", "Tidak Diketahui"]
+    status_icon_map = {"Aktif": "✅", "Lulus": "🎓", "Cuti": "⏸️", "Tidak Aktif": "🚫", "DO/Putus Studi": "⚠️", "Mengundurkan Diri": "↩️", "Meninggal": "🕊️", "Skorsing": "⛔", "Pindah/Transfer": "🔄", "Tidak Diketahui": "❓"}
 
-        visible_statuses = [s for s in preferred_status_order if status_counts.get(s, 0) > 0]
-        other_statuses = sorted(s for s in status_counts if s not in preferred_status_order)
-        visible_statuses.extend(other_statuses)
+    visible_statuses = [s for s in preferred_status_order if status_counts.get(s, 0) > 0]
+    other_statuses = sorted(s for s in status_counts if s not in preferred_status_order)
+    visible_statuses.extend(other_statuses)
 
-        student_cards = [("👥", "Total mahasiswa", format_number(len(academic_df)), "Sesuai filter akademik")]
-        for status_name in visible_statuses:
-            student_cards.append((status_icon_map.get(status_name, "📌"), status_name, format_number(status_counts.get(status_name, 0)), "Status mahasiswa"))
+    student_cards = [("👥", "Total mahasiswa", format_number(len(academic_df)), "Sesuai filter akademik")]
+    for status_name in visible_statuses:
+        student_cards.append((status_icon_map.get(status_name, "📌"), status_name, format_number(status_counts.get(status_name, 0)), "Status mahasiswa"))
 
-        for start_index in range(0, len(student_cards), 5):
-            card_columns = st.columns(min(5, len(student_cards) - start_index))
-            for column, item in zip(card_columns, student_cards[start_index:start_index + 5]):
-                with column: kpi(*item)
+    for start_index in range(0, len(student_cards), 5):
+        card_columns = st.columns(min(5, len(student_cards) - start_index))
+        for column, item in zip(card_columns, student_cards[start_index:start_index + 5]):
+            with column: kpi(*item)
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        mhs_col1, mhs_col2 = st.columns([1.45, 0.75])
-        
-        with mhs_col1:
-            prodi_base = academic_df.groupby(["fakultas", "jurusan", "jenjang_normal"], dropna=False).agg(Total_Mahasiswa=("nim", "nunique")).reset_index()
-            chart_df = prodi_base.nlargest(20, "Total_Mahasiswa").sort_values("Total_Mahasiswa")
-            figure = px.bar(chart_df, x="Total_Mahasiswa", y="jurusan", orientation="h", text="Total_Mahasiswa", title="20 Program Studi dengan Mahasiswa Terbanyak", color_discrete_sequence=[C["primary"]], hover_data={"fakultas": True, "jenjang_normal": True, "Total_Mahasiswa": True})
-            figure.update_layout(height=620, plot_bgcolor="white", paper_bgcolor="white", showlegend=False, xaxis_title="Total Mahasiswa", yaxis_title=None, margin=dict(l=10, r=35, t=55, b=25))
-            figure.update_traces(textposition="outside")
-            st.plotly_chart(figure, use_container_width=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+    mhs_col1, mhs_col2 = st.columns([1.45, 0.75])
+    
+    with mhs_col1:
+        prodi_base = academic_df.groupby(["fakultas", "jurusan", "jenjang_normal"], dropna=False).agg(Total_Mahasiswa=("nim", "nunique")).reset_index()
+        chart_df = prodi_base.nlargest(20, "Total_Mahasiswa").sort_values("Total_Mahasiswa")
+        figure = px.bar(chart_df, x="Total_Mahasiswa", y="jurusan", orientation="h", text="Total_Mahasiswa", title="20 Program Studi dengan Mahasiswa Terbanyak", color_discrete_sequence=[C["primary"]], hover_data={"fakultas": True, "jenjang_normal": True, "Total_Mahasiswa": True})
+        figure.update_layout(height=620, plot_bgcolor="white", paper_bgcolor="white", showlegend=False, xaxis_title="Total Mahasiswa", yaxis_title=None, margin=dict(l=10, r=35, t=55, b=25))
+        figure.update_traces(textposition="outside")
+        st.plotly_chart(figure, use_container_width=True)
 
-        with mhs_col2:
-            gender_df = academic_df["gender_normal"].value_counts().rename_axis("Jenis Kelamin").reset_index(name="Mahasiswa")
-            figure = px.pie(gender_df, names="Jenis Kelamin", values="Mahasiswa", hole=0.58, title="Komposisi Jenis Kelamin", color_discrete_sequence=[C["primary"], C["orange"], C["gray"]])
-            figure.update_layout(height=500, paper_bgcolor="white", legend=dict(orientation="h", y=-0.08))
-            figure.update_traces(textinfo="label+value+percent")
-            st.plotly_chart(figure, use_container_width=True)
+    with mhs_col2:
+        gender_df = academic_df["gender_normal"].value_counts().rename_axis("Jenis Kelamin").reset_index(name="Mahasiswa")
+        figure = px.pie(gender_df, names="Jenis Kelamin", values="Mahasiswa", hole=0.58, title="Komposisi Jenis Kelamin", color_discrete_sequence=[C["primary"], C["orange"], C["gray"]])
+        figure.update_layout(height=500, paper_bgcolor="white", legend=dict(orientation="h", y=-0.08))
+        figure.update_traces(textinfo="label+value+percent")
+        st.plotly_chart(figure, use_container_width=True)
 
-        province_coordinates = {
-            "ACEH": (4.6951, 96.7494), "SUMATERA UTARA": (2.1154, 99.5451), "SUMATERA BARAT": (-0.7399, 100.8000), "RIAU": (0.2933, 101.7068),
-            "KEPULAUAN RIAU": (3.9457, 108.1429), "JAMBI": (-1.4852, 102.4381), "SUMATERA SELATAN": (-3.3194, 103.9144), "KEPULAUAN BANGKA BELITUNG": (-2.7411, 106.4406),
-            "BENGKULU": (-3.5778, 102.3464), "LAMPUNG": (-4.5586, 105.4068), "DKI JAKARTA": (-6.2088, 106.8456), "JAWA BARAT": (-6.9175, 107.6191),
-            "BANTEN": (-6.4058, 106.0640), "JAWA TENGAH": (-7.1510, 110.1403), "DI YOGYAKARTA": (-7.8754, 110.4262), "JAWA TIMUR": (-7.5361, 112.2384),
-            "BALI": (-8.3405, 115.0920), "NUSA TENGGARA BARAT": (-8.6529, 117.3616), "NUSA TENGGARA TIMUR": (-8.6574, 121.0794), "KALIMANTAN BARAT": (-0.2788, 111.4753),
-            "KALIMANTAN TENGAH": (-1.6815, 113.3824), "KALIMANTAN SELATAN": (-3.0926, 115.2838), "KALIMANTAN TIMUR": (0.5387, 116.4194), "KALIMANTAN UTARA": (3.0731, 116.0414),
-            "SULAWESI UTARA": (0.6247, 123.9750), "GORONTALO": (0.6999, 122.4467), "SULAWESI TENGAH": (-1.4300, 121.4456), "SULAWESI BARAT": (-2.8441, 119.2321),
-            "SULAWESI SELATAN": (-3.6688, 119.9741), "SULAWESI TENGGARA": (-4.1449, 122.1746), "MALUKU": (-3.2385, 130.1453), "MALUKU UTARA": (1.5700, 127.8088),
-            "PAPUA BARAT": (-1.3361, 133.1747), "PAPUA BARAT DAYA": (-1.1307, 131.2416), "PAPUA": (-4.2699, 138.0804), "PAPUA TENGAH": (-3.7048, 136.6798),
-            "PAPUA PEGUNUNGAN": (-4.2699, 138.6667), "PAPUA SELATAN": (-7.1327, 139.2310),
-        }
-        province_aliases = {"NANGGROE ACEH DARUSSALAM": "ACEH", "NAD": "ACEH", "SUMUT": "SUMATERA UTARA", "SUMBAR": "SUMATERA BARAT", "SUMSEL": "SUMATERA SELATAN", "KEPRI": "KEPULAUAN RIAU", "BANGKA BELITUNG": "KEPULAUAN BANGKA BELITUNG", "DKI": "DKI JAKARTA", "JAKARTA": "DKI JAKARTA", "JABAR": "JAWA BARAT", "JATENG": "JAWA TENGAH", "DAERAH ISTIMEWA YOGYAKARTA": "DI YOGYAKARTA", "D.I. YOGYAKARTA": "DI YOGYAKARTA", "DIY": "DI YOGYAKARTA", "JATIM": "JAWA TIMUR", "NTB": "NUSA TENGGARA BARAT", "NTT": "NUSA TENGGARA TIMUR", "KALBAR": "KALIMANTAN BARAT", "KALTENG": "KALIMANTAN TENGAH", "KALSEL": "KALIMANTAN SELATAN", "KALTIM": "KALIMANTAN TIMUR", "KALTARA": "KALIMANTAN UTARA", "SULUT": "SULAWESI UTARA", "SULTENG": "SULAWESI TENGAH", "SULBAR": "SULAWESI BARAT", "SULSEL": "SULAWESI SELATAN", "SULTRA": "SULAWESI TENGGARA", "IRIAN JAYA": "PAPUA"}
+    province_coordinates = {
+        "ACEH": (4.6951, 96.7494), "SUMATERA UTARA": (2.1154, 99.5451), "SUMATERA BARAT": (-0.7399, 100.8000), "RIAU": (0.2933, 101.7068),
+        "KEPULAUAN RIAU": (3.9457, 108.1429), "JAMBI": (-1.4852, 102.4381), "SUMATERA SELATAN": (-3.3194, 103.9144), "KEPULAUAN BANGKA BELITUNG": (-2.7411, 106.4406),
+        "BENGKULU": (-3.5778, 102.3464), "LAMPUNG": (-4.5586, 105.4068), "DKI JAKARTA": (-6.2088, 106.8456), "JAWA BARAT": (-6.9175, 107.6191),
+        "BANTEN": (-6.4058, 106.0640), "JAWA TENGAH": (-7.1510, 110.1403), "DI YOGYAKARTA": (-7.8754, 110.4262), "JAWA TIMUR": (-7.5361, 112.2384),
+        "BALI": (-8.3405, 115.0920), "NUSA TENGGARA BARAT": (-8.6529, 117.3616), "NUSA TENGGARA TIMUR": (-8.6574, 121.0794), "KALIMANTAN BARAT": (-0.2788, 111.4753),
+        "KALIMANTAN TENGAH": (-1.6815, 113.3824), "KALIMANTAN SELATAN": (-3.0926, 115.2838), "KALIMANTAN TIMUR": (0.5387, 116.4194), "KALIMANTAN UTARA": (3.0731, 116.0414),
+        "SULAWESI UTARA": (0.6247, 123.9750), "GORONTALO": (0.6999, 122.4467), "SULAWESI TENGAH": (-1.4300, 121.4456), "SULAWESI BARAT": (-2.8441, 119.2321),
+        "SULAWESI SELATAN": (-3.6688, 119.9741), "SULAWESI TENGGARA": (-4.1449, 122.1746), "MALUKU": (-3.2385, 130.1453), "MALUKU UTARA": (1.5700, 127.8088),
+        "PAPUA BARAT": (-1.3361, 133.1747), "PAPUA BARAT DAYA": (-1.1307, 131.2416), "PAPUA": (-4.2699, 138.0804), "PAPUA TENGAH": (-3.7048, 136.6798),
+        "PAPUA PEGUNUNGAN": (-4.2699, 138.6667), "PAPUA SELATAN": (-7.1327, 139.2310),
+    }
+    province_aliases = {"NANGGROE ACEH DARUSSALAM": "ACEH", "NAD": "ACEH", "SUMUT": "SUMATERA UTARA", "SUMBAR": "SUMATERA BARAT", "SUMSEL": "SUMATERA SELATAN", "KEPRI": "KEPULAUAN RIAU", "BANGKA BELITUNG": "KEPULAUAN BANGKA BELITUNG", "DKI": "DKI JAKARTA", "JAKARTA": "DKI JAKARTA", "JABAR": "JAWA BARAT", "JATENG": "JAWA TENGAH", "DAERAH ISTIMEWA YOGYAKARTA": "DI YOGYAKARTA", "D.I. YOGYAKARTA": "DI YOGYAKARTA", "DIY": "DI YOGYAKARTA", "JATIM": "JAWA TIMUR", "NTB": "NUSA TENGGARA BARAT", "NTT": "NUSA TENGGARA TIMUR", "KALBAR": "KALIMANTAN BARAT", "KALTENG": "KALIMANTAN TENGAH", "KALSEL": "KALIMANTAN SELATAN", "KALTIM": "KALIMANTAN TIMUR", "KALTARA": "KALIMANTAN UTARA", "SULUT": "SULAWESI UTARA", "SULTENG": "SULAWESI TENGAH", "SULBAR": "SULAWESI BARAT", "SULSEL": "SULAWESI SELATAN", "SULTRA": "SULAWESI TENGGARA", "IRIAN JAYA": "PAPUA"}
 
-        province_map_df = academic_df["propinsi"].fillna("Tidak diketahui").astype(str).str.strip().str.upper().replace(province_aliases).value_counts().rename_axis("Propinsi").reset_index(name="Mahasiswa")
-        province_map_df["Latitude"] = province_map_df["Propinsi"].map(lambda v: province_coordinates.get(v, (None, None))[0])
-        province_map_df["Longitude"] = province_map_df["Propinsi"].map(lambda v: province_coordinates.get(v, (None, None))[1])
-        mapped_provinces = province_map_df.dropna(subset=["Latitude", "Longitude"]).copy()
+    province_map_df = academic_df["propinsi"].fillna("Tidak diketahui").astype(str).str.strip().str.upper().replace(province_aliases).value_counts().rename_axis("Propinsi").reset_index(name="Mahasiswa")
+    province_map_df["Latitude"] = province_map_df["Propinsi"].map(lambda v: province_coordinates.get(v, (None, None))[0])
+    province_map_df["Longitude"] = province_map_df["Propinsi"].map(lambda v: province_coordinates.get(v, (None, None))[1])
+    mapped_provinces = province_map_df.dropna(subset=["Latitude", "Longitude"]).copy()
 
-        if not mapped_provinces.empty:
-            figure = px.scatter_geo(mapped_provinces, lat="Latitude", lon="Longitude", size="Mahasiswa", color="Mahasiswa", hover_name="Propinsi", hover_data={"Mahasiswa": ":,", "Latitude": False, "Longitude": False}, size_max=42, title="Peta Sebaran Asal Propinsi Mahasiswa", color_continuous_scale="Teal")
-            figure.update_geos(projection_type="mercator", showland=True, landcolor="#EEF4F2", showocean=True, oceancolor="#EAF4FB", showcountries=True, countrycolor="#CBD5E1", coastlinecolor="#94A3B8", lataxis_range=[-12, 7], lonaxis_range=[94, 142])
-            figure.update_layout(height=500, paper_bgcolor="white", margin=dict(l=5, r=5, t=55, b=5), coloraxis_colorbar_title="Mahasiswa")
-            st.plotly_chart(figure, use_container_width=True)
+    if not mapped_provinces.empty:
+        figure = px.scatter_geo(mapped_provinces, lat="Latitude", lon="Longitude", size="Mahasiswa", color="Mahasiswa", hover_name="Propinsi", hover_data={"Mahasiswa": ":,", "Latitude": False, "Longitude": False}, size_max=42, title="Peta Sebaran Asal Propinsi Mahasiswa", color_continuous_scale="Teal")
+        figure.update_geos(projection_type="mercator", showland=True, landcolor="#EEF4F2", showocean=True, oceancolor="#EAF4FB", showcountries=True, countrycolor="#CBD5E1", coastlinecolor="#94A3B8", lataxis_range=[-12, 7], lonaxis_range=[94, 142])
+        figure.update_layout(height=500, paper_bgcolor="white", margin=dict(l=5, r=5, t=55, b=5), coloraxis_colorbar_title="Mahasiswa")
+        st.plotly_chart(figure, use_container_width=True)
 
-        st.markdown("**Detail Data Mahasiswa** (Tampilan dibatasi 10 baris pertama)")
-        selected_mhs_columns = [col for col in ["nim", "nama", "fakultas", "jurusan", "jenjang_normal", "tahun_angkatan", "status_kategori", "gender_normal", "propinsi", "jenis_seleksi"] if col in academic_df.columns]
-        mhs_display_df = academic_df[selected_mhs_columns]
-        st.dataframe(
-            mhs_display_df.head(10), use_container_width=True, hide_index=True,
-            column_config={"nim": "NIM", "nama": "Nama", "fakultas": "Fakultas", "jurusan": "Program Studi", "jenjang_normal": "Jenjang", "tahun_angkatan": "Angkatan", "status_kategori": "Status", "gender_normal": "L/P", "propinsi": "Propinsi", "jenis_seleksi": "Jalur Seleksi"}
-        )
+    st.markdown("**Detail Data Mahasiswa** (Tampilan dibatasi 10 baris pertama)")
+    selected_mhs_columns = [col for col in ["nim", "nama", "fakultas", "jurusan", "jenjang_normal", "tahun_angkatan", "status_kategori", "gender_normal", "propinsi", "jenis_seleksi"] if col in academic_df.columns]
+    mhs_display_df = academic_df[selected_mhs_columns]
+    st.dataframe(
+        mhs_display_df.head(10), use_container_width=True, hide_index=True,
+        column_config={"nim": "NIM", "nama": "Nama", "fakultas": "Fakultas", "jurusan": "Program Studi", "jenjang_normal": "Jenjang", "tahun_angkatan": "Angkatan", "status_kategori": "Status", "gender_normal": "L/P", "propinsi": "Propinsi", "jenis_seleksi": "Jalur Seleksi"}
+    )
 
 
     # =========================================================
     # C. DATA ASAL / JENIS SEKOLAH
     # =========================================================
-    elif academic_section == "Asal/Jenis Sekolah":
-        subheading("C. Data Asal / Jenis Sekolah")
-        empty_dashboard("Data Asal / Jenis Sekolah", global_year, "🏫")
+    subheading("C. Data Asal / Jenis Sekolah")
+    empty_dashboard("Data Asal / Jenis Sekolah", global_year, "🏫")
 
 
     # =========================================================
     # D. DATA KEBUTUHAN KHUSUS
     # =========================================================
-    elif academic_section == "Kebutuhan Khusus":
-        subheading("D. Data Mahasiswa Berkebutuhan Khusus")
+    subheading("D. Data Mahasiswa Berkebutuhan Khusus")
 
-        filtered_difabel = df_difabel.copy()
-        if selected_cohorts: filtered_difabel = filtered_difabel[filtered_difabel["tahun_angkatan"].isin(selected_cohorts)]
-        if selected_faculties: filtered_difabel = filtered_difabel[filtered_difabel["fakultas"].isin(selected_faculties)]
-        if selected_programs: filtered_difabel = filtered_difabel[filtered_difabel["jurusan"].isin(selected_programs)]
-        if selected_provinces: filtered_difabel = filtered_difabel[filtered_difabel["propinsi"].isin(selected_provinces)]
+    filtered_difabel = df_difabel.copy()
+    if selected_cohorts: filtered_difabel = filtered_difabel[filtered_difabel["tahun_angkatan"].isin(selected_cohorts)]
+    if selected_faculties: filtered_difabel = filtered_difabel[filtered_difabel["fakultas"].isin(selected_faculties)]
+    if selected_programs: filtered_difabel = filtered_difabel[filtered_difabel["jurusan"].isin(selected_programs)]
+    if selected_provinces: filtered_difabel = filtered_difabel[filtered_difabel["propinsi"].isin(selected_provinces)]
 
-        cols = st.columns(3)
-        with cols[0]: kpi("♿", "Total mahasiswa", format_number(filtered_difabel["nim"].nunique()), "NIM unik")
-        with cols[1]: kpi("✅", "Status aktif", format_number(filtered_difabel.loc[filtered_difabel["status_normal"].eq("aktif"), "nim"].nunique()), "")
-        with cols[2]: kpi("📚", "Program studi", format_number(filtered_difabel["jurusan"].nunique()), "")
+    cols = st.columns(3)
+    with cols[0]: kpi("♿", "Total mahasiswa", format_number(filtered_difabel["nim"].nunique()), "NIM unik")
+    with cols[1]: kpi("✅", "Status aktif", format_number(filtered_difabel.loc[filtered_difabel["status_normal"].eq("aktif"), "nim"].nunique()), "")
+    with cols[2]: kpi("📚", "Program studi", format_number(filtered_difabel["jurusan"].nunique()), "")
 
-        if not filtered_difabel.empty:
-            need_df = filtered_difabel["kebutuhan_khusus"].value_counts().rename_axis("Kebutuhan Khusus").reset_index(name="Mahasiswa").sort_values("Mahasiswa")
-            figure = px.bar(need_df, x="Mahasiswa", y="Kebutuhan Khusus", orientation="h", title="Jenis Kebutuhan Khusus", color_discrete_sequence=[C["primary"]])
-            st.plotly_chart(figure, use_container_width=True)
+    if not filtered_difabel.empty:
+        need_df = filtered_difabel["kebutuhan_khusus"].value_counts().rename_axis("Kebutuhan Khusus").reset_index(name="Mahasiswa").sort_values("Mahasiswa")
+        figure = px.bar(need_df, x="Mahasiswa", y="Kebutuhan Khusus", orientation="h", title="Jenis Kebutuhan Khusus", color_discrete_sequence=[C["primary"]])
+        st.plotly_chart(figure, use_container_width=True)
 
-        st.markdown("**Detail Mahasiswa Kebutuhan Khusus** (Tampilan dibatasi 10 baris pertama)")
-        difabel_export_cols = [c for c in ["nim", "nama", "fakultas", "jurusan", "tahun_angkatan", "kebutuhan_khusus", "status_normal", "gender_normal", "propinsi"] if c in filtered_difabel.columns]
-        st.dataframe(filtered_difabel[difabel_export_cols].head(10), use_container_width=True, hide_index=True)
+    st.markdown("**Detail Mahasiswa Kebutuhan Khusus** (Tampilan dibatasi 10 baris pertama)")
+    difabel_export_cols = [c for c in ["nim", "nama", "fakultas", "jurusan", "tahun_angkatan", "kebutuhan_khusus", "status_normal", "gender_normal", "propinsi"] if c in filtered_difabel.columns]
+    st.dataframe(filtered_difabel[difabel_export_cols].head(10), use_container_width=True, hide_index=True)
 
 
     # =========================================================
     # E. DATA DAERAH TERTINGGAL
     # =========================================================
-    elif academic_section == "Daerah Tertinggal":
-        subheading("E. Data Mahasiswa Daerah Tertinggal")
+    subheading("E. Data Mahasiswa Daerah Tertinggal")
 
-        disadvantaged = academic_df[academic_df["asal_daerah_tertinggal"]]
+    disadvantaged = academic_df[academic_df["asal_daerah_tertinggal"]]
 
-        cols = st.columns(3)
-        with cols[0]: kpi("🗺️", "Mahasiswa daerah tertinggal", format_number(len(disadvantaged)), "")
-        with cols[1]: kpi("🏘️", "Kabupaten teridentifikasi", format_number(disadvantaged["kota_normal"].nunique()), "")
-        with cols[2]: kpi("🌍", "Propinsi", format_number(disadvantaged["propinsi"].nunique()), "")
+    cols = st.columns(3)
+    with cols[0]: kpi("🗺️", "Mahasiswa daerah tertinggal", format_number(len(disadvantaged)), "")
+    with cols[1]: kpi("🏘️", "Kabupaten teridentifikasi", format_number(disadvantaged["kota_normal"].nunique()), "")
+    with cols[2]: kpi("🌍", "Propinsi", format_number(disadvantaged["propinsi"].nunique()), "")
 
-        st.markdown("**Detail Mahasiswa Daerah Tertinggal** (Tampilan dibatasi 10 baris pertama)")
-        dt_export_cols = [c for c in ["nim", "nama", "fakultas", "jurusan", "tahun_angkatan", "status_kategori", "gender_normal", "kota_normal", "propinsi"] if c in disadvantaged.columns]
-        st.dataframe(disadvantaged[dt_export_cols].head(10), use_container_width=True, hide_index=True)
+    st.markdown("**Detail Mahasiswa Daerah Tertinggal** (Tampilan dibatasi 10 baris pertama)")
+    dt_export_cols = [c for c in ["nim", "nama", "fakultas", "jurusan", "tahun_angkatan", "status_kategori", "gender_normal", "kota_normal", "propinsi"] if c in disadvantaged.columns]
+    st.dataframe(disadvantaged[dt_export_cols].head(10), use_container_width=True, hide_index=True)
 
 
     # =========================================================
     # F. DATA KELULUSAN
     # =========================================================
-    elif academic_section == "Kelulusan":
-        subheading("F. Data Kelulusan")
+    subheading("F. Data Kelulusan")
 
-        academic_start_year = int(academic_period.split("/")[0])
-        academic_yud = df_yudisium[df_yudisium["tahun_lulus"].eq(academic_start_year)].copy()
+    academic_yud = df_yudisium[df_yudisium["tahun_lulus"].eq(academic_start_year)].copy()
 
-        if selected_levels: academic_yud = academic_yud[academic_yud["jenjang_normal"].isin(selected_levels)]
-        if selected_faculties: academic_yud = academic_yud[academic_yud["fakultas"].isin(selected_faculties)]
-        if selected_programs: academic_yud = academic_yud[academic_yud["prodi"].isin(selected_programs)]
+    if selected_levels: academic_yud = academic_yud[academic_yud["jenjang_normal"].isin(selected_levels)]
+    if selected_faculties: academic_yud = academic_yud[academic_yud["fakultas"].isin(selected_faculties)]
+    if selected_programs: academic_yud = academic_yud[academic_yud["prodi"].isin(selected_programs)]
 
-        graduate_count = academic_yud["nim"].nunique()
-        on_time_count = academic_yud.loc[academic_yud["tepat_waktu_bool"], "nim"].nunique()
-        on_time_ipk_count = academic_yud.loc[academic_yud["tepat_waktu_ipk_325"], "nim"].nunique()
-        on_time_percentage = percentage(on_time_count, graduate_count)
+    graduate_count = academic_yud["nim"].nunique()
+    on_time_count = academic_yud.loc[academic_yud["tepat_waktu_bool"], "nim"].nunique()
+    on_time_ipk_count = academic_yud.loc[academic_yud["tepat_waktu_ipk_325"], "nim"].nunique()
+    on_time_percentage = percentage(on_time_count, graduate_count)
 
-        graduation_cols = st.columns(4)
-        graduation_values = [
-            ("🎓", "Jumlah lulusan", format_number(graduate_count), f"Yudisium {academic_start_year}"),
-            ("⏱️", "Lulus tepat waktu", format_number(on_time_count), f"Yudisium {academic_start_year}"),
-            ("🏅", "Tepat waktu dan IPK ≥ 3,25", format_number(on_time_ipk_count), f"Yudisium {academic_start_year}"),
-            ("📈", "Kelulusan tepat waktu", format_percent(on_time_percentage), f"Yudisium {academic_start_year}"),
-        ]
-        for column, item in zip(graduation_cols, graduation_values):
-            with column: kpi(*item)
+    graduation_cols = st.columns(4)
+    graduation_values = [
+        ("🎓", "Jumlah lulusan", format_number(graduate_count), f"Yudisium {academic_start_year}"),
+        ("⏱️", "Lulus tepat waktu", format_number(on_time_count), f"Yudisium {academic_start_year}"),
+        ("🏅", "Tepat waktu dan IPK ≥ 3,25", format_number(on_time_ipk_count), f"Yudisium {academic_start_year}"),
+        ("📈", "Kelulusan tepat waktu", format_percent(on_time_percentage), f"Yudisium {academic_start_year}"),
+    ]
+    for column, item in zip(graduation_cols, graduation_values):
+        with column: kpi(*item)
 
-        if academic_yud.empty:
-            st.info(f"Data yudisium tahun {academic_start_year} tidak tersedia untuk filter yang dipilih.")
-        else:
-            graduation_status = pd.DataFrame({"Kategori": ["Lulus tepat waktu", "Tidak tepat waktu"], "Lulusan": [on_time_count, max(graduate_count - on_time_count, 0)]})
-            graduation_ipk = pd.DataFrame({"Kategori": ["Tepat waktu dan IPK ≥ 3,25", "Tepat waktu dan IPK < 3,25", "Tidak tepat waktu"], "Lulusan": [on_time_ipk_count, max(on_time_count - on_time_ipk_count, 0), max(graduate_count - on_time_count, 0)]})
+    if academic_yud.empty:
+        st.info(f"Data yudisium tahun {academic_start_year} tidak tersedia untuk filter yang dipilih.")
+    else:
+        graduation_status = pd.DataFrame({"Kategori": ["Lulus tepat waktu", "Tidak tepat waktu"], "Lulusan": [on_time_count, max(graduate_count - on_time_count, 0)]})
+        graduation_ipk = pd.DataFrame({"Kategori": ["Tepat waktu dan IPK ≥ 3,25", "Tepat waktu dan IPK < 3,25", "Tidak tepat waktu"], "Lulusan": [on_time_ipk_count, max(on_time_count - on_time_ipk_count, 0), max(graduate_count - on_time_count, 0)]})
 
-            graduation_col, ipk_col = st.columns(2)
-            with graduation_col:
-                figure = px.pie(graduation_status, names="Kategori", values="Lulusan", hole=0.58, title=f"Komposisi Ketepatan Waktu Yudisium {academic_start_year}", color_discrete_sequence=[C["primary"], C["orange"]])
-                figure.update_layout(height=430, paper_bgcolor="white")
-                figure.update_traces(textinfo="label+value+percent")
-                st.plotly_chart(figure, use_container_width=True)
-
-            with ipk_col:
-                figure = px.bar(graduation_ipk, x="Kategori", y="Lulusan", text="Lulusan", title="Ketepatan Waktu dan IPK Lulusan", color="Kategori", color_discrete_sequence=[C["primary"], C["yellow"], C["orange"]])
-                figure.update_layout(height=430, paper_bgcolor="white", plot_bgcolor="white", showlegend=False, xaxis_title=None, yaxis_title="Lulusan", margin=dict(l=10, r=10, t=55, b=90))
-                figure.update_xaxes(tickangle=-20)
-                st.plotly_chart(figure, use_container_width=True)
-
-            graduation_faculty = academic_yud.groupby("fakultas", dropna=False).agg(Jumlah_Lulusan=("nim", "nunique"), Lulus_Tepat_Waktu=("tepat_waktu_bool", "sum"), Tepat_Waktu_IPK_325=("tepat_waktu_ipk_325", "sum"), Rata_Rata_IPK=("ipk", "mean")).reset_index()
-            jumlah_lulusan_numeric = pd.to_numeric(graduation_faculty["Jumlah_Lulusan"], errors="coerce")
-            lulus_tepat_waktu_numeric = pd.to_numeric(graduation_faculty["Lulus_Tepat_Waktu"], errors="coerce")
-            graduation_faculty["Kelulusan_Tepat_Waktu"] = lulus_tepat_waktu_numeric.div(jumlah_lulusan_numeric.where(jumlah_lulusan_numeric.ne(0))).mul(100).round(2)
-            tepat_waktu_ipk_numeric = pd.to_numeric(graduation_faculty["Tepat_Waktu_IPK_325"], errors="coerce")
-            graduation_faculty["Tepat_Waktu_IPK_325_Persen"] = tepat_waktu_ipk_numeric.div(jumlah_lulusan_numeric.where(jumlah_lulusan_numeric.ne(0))).mul(100).round(2)
-            graduation_faculty["Rata_Rata_IPK"] = graduation_faculty["Rata_Rata_IPK"].round(2)
-
-            figure = px.bar(graduation_faculty.sort_values("Kelulusan_Tepat_Waktu"), x="Kelulusan_Tepat_Waktu", y="fakultas", orientation="h", text="Kelulusan_Tepat_Waktu", title="Persentase Kelulusan Tepat Waktu per Fakultas", color_discrete_sequence=[C["primary"]])
-            figure.update_layout(height=520, paper_bgcolor="white", plot_bgcolor="white", showlegend=False, xaxis_title="Persentase", yaxis_title=None)
-            figure.update_xaxes(range=[0, 100])
-            figure.update_traces(texttemplate="%{text:.2f}%", textposition="outside")
+        graduation_col, ipk_col = st.columns(2)
+        with graduation_col:
+            figure = px.pie(graduation_status, names="Kategori", values="Lulusan", hole=0.58, title=f"Komposisi Ketepatan Waktu Yudisium {academic_start_year}", color_discrete_sequence=[C["primary"], C["orange"]])
+            figure.update_layout(height=430, paper_bgcolor="white")
+            figure.update_traces(textinfo="label+value+percent")
             st.plotly_chart(figure, use_container_width=True)
 
-            yudisium_columns = [c for c in ["nim", "nama", "tanggal_lulus", "tahun_lulus", "jenjang_normal", "fakultas", "prodi", "semester", "ipk", "tepat_waktu"] if c in academic_yud.columns]
-            graduation_export_data = academic_yud[yudisium_columns].copy()
+        with ipk_col:
+            figure = px.bar(graduation_ipk, x="Kategori", y="Lulusan", text="Lulusan", title="Ketepatan Waktu dan IPK Lulusan", color="Kategori", color_discrete_sequence=[C["primary"], C["yellow"], C["orange"]])
+            figure.update_layout(height=430, paper_bgcolor="white", plot_bgcolor="white", showlegend=False, xaxis_title=None, yaxis_title="Lulusan", margin=dict(l=10, r=10, t=55, b=90))
+            figure.update_xaxes(tickangle=-20)
+            st.plotly_chart(figure, use_container_width=True)
 
-            st.markdown("**Detail Data Kelulusan** (Tampilan dibatasi 10 baris pertama)")
-            st.dataframe(
-                graduation_export_data.head(10), use_container_width=True, hide_index=True, 
-                column_config={"nim": "NIM", "nama": "Nama", "tanggal_lulus": st.column_config.DateColumn("Tanggal Yudisium/Lulus", format="DD/MM/YYYY"), "tahun_lulus": "Tahun Lulus", "jenjang_normal": "Jenjang", "fakultas": "Fakultas", "prodi": "Program Studi", "semester": "Semester", "ipk": st.column_config.NumberColumn("IPK", format="%.2f"), "tepat_waktu": "Tepat Waktu"}
-            )
+        graduation_faculty = academic_yud.groupby("fakultas", dropna=False).agg(Jumlah_Lulusan=("nim", "nunique"), Lulus_Tepat_Waktu=("tepat_waktu_bool", "sum"), Tepat_Waktu_IPK_325=("tepat_waktu_ipk_325", "sum"), Rata_Rata_IPK=("ipk", "mean")).reset_index()
+        jumlah_lulusan_numeric = pd.to_numeric(graduation_faculty["Jumlah_Lulusan"], errors="coerce")
+        lulus_tepat_waktu_numeric = pd.to_numeric(graduation_faculty["Lulus_Tepat_Waktu"], errors="coerce")
+        graduation_faculty["Kelulusan_Tepat_Waktu"] = lulus_tepat_waktu_numeric.div(jumlah_lulusan_numeric.where(jumlah_lulusan_numeric.ne(0))).mul(100).round(2)
+        tepat_waktu_ipk_numeric = pd.to_numeric(graduation_faculty["Tepat_Waktu_IPK_325"], errors="coerce")
+        graduation_faculty["Tepat_Waktu_IPK_325_Persen"] = tepat_waktu_ipk_numeric.div(jumlah_lulusan_numeric.where(jumlah_lulusan_numeric.ne(0))).mul(100).round(2)
+        graduation_faculty["Rata_Rata_IPK"] = graduation_faculty["Rata_Rata_IPK"].round(2)
+
+        figure = px.bar(graduation_faculty.sort_values("Kelulusan_Tepat_Waktu"), x="Kelulusan_Tepat_Waktu", y="fakultas", orientation="h", text="Kelulusan_Tepat_Waktu", title="Persentase Kelulusan Tepat Waktu per Fakultas", color_discrete_sequence=[C["primary"]])
+        figure.update_layout(height=520, paper_bgcolor="white", plot_bgcolor="white", showlegend=False, xaxis_title="Persentase", yaxis_title=None)
+        figure.update_xaxes(range=[0, 100])
+        figure.update_traces(texttemplate="%{text:.2f}%", textposition="outside")
+        st.plotly_chart(figure, use_container_width=True)
+
+        yudisium_columns = [c for c in ["nim", "nama", "tanggal_lulus", "tahun_lulus", "jenjang_normal", "fakultas", "prodi", "semester", "ipk", "tepat_waktu"] if c in academic_yud.columns]
+        graduation_export_data = academic_yud[yudisium_columns].copy()
+
+        st.markdown("**Detail Data Kelulusan** (Tampilan dibatasi 10 baris pertama)")
+        st.dataframe(
+            graduation_export_data.head(10), use_container_width=True, hide_index=True, 
+            column_config={"nim": "NIM", "nama": "Nama", "tanggal_lulus": st.column_config.DateColumn("Tanggal Yudisium/Lulus", format="DD/MM/YYYY"), "tahun_lulus": "Tahun Lulus", "jenjang_normal": "Jenjang", "fakultas": "Fakultas", "prodi": "Program Studi", "semester": "Semester", "ipk": st.column_config.NumberColumn("IPK", format="%.2f"), "tepat_waktu": "Tepat Waktu"}
+        )
 
 
     # =========================================================
     # G. DATA AKREDITASI PROGRAM STUDI
     # =========================================================
-    elif academic_section == "Program Studi":
-        subheading("G. Data Akreditasi Program Studi")
-        
-        akreditasi_filter = df_akreditasi.copy()
-        if selected_levels: akreditasi_filter = akreditasi_filter[akreditasi_filter["jenjang_normal"].isin(selected_levels)]
-        if selected_faculties: akreditasi_filter = akreditasi_filter[akreditasi_filter["fakultas"].isin(selected_faculties)]
-        if selected_programs: akreditasi_filter = akreditasi_filter[akreditasi_filter["prodi"].isin(selected_programs)]
+    subheading("G. Data Akreditasi Program Studi")
+    
+    akreditasi_filter = df_akreditasi.copy()
+    if selected_levels: akreditasi_filter = akreditasi_filter[akreditasi_filter["jenjang_normal"].isin(selected_levels)]
+    if selected_faculties: akreditasi_filter = akreditasi_filter[akreditasi_filter["fakultas"].isin(selected_faculties)]
+    if selected_programs: akreditasi_filter = akreditasi_filter[akreditasi_filter["prodi"].isin(selected_programs)]
 
-        total_prodi_akreditasi = len(akreditasi_filter)
-        akreditasi_aktif = int(akreditasi_filter["status_akreditasi"].eq("Aktif").sum())
-        akreditasi_kedaluwarsa = int(akreditasi_filter["status_akreditasi"].eq("Kedaluwarsa").sum())
-        segera_berakhir = int(akreditasi_filter["masa_berakhir"].eq("Berakhir ≤ 1 tahun").sum())
-        jumlah_unggul = int(akreditasi_filter["peringkat"].str.upper().eq("UNGGUL").sum())
+    total_prodi_akreditasi = len(akreditasi_filter)
+    akreditasi_aktif = int(akreditasi_filter["status_akreditasi"].eq("Aktif").sum())
+    akreditasi_kedaluwarsa = int(akreditasi_filter["status_akreditasi"].eq("Kedaluwarsa").sum())
+    segera_berakhir = int(akreditasi_filter["masa_berakhir"].eq("Berakhir ≤ 1 tahun").sum())
+    jumlah_unggul = int(akreditasi_filter["peringkat"].str.upper().eq("UNGGUL").sum())
 
-        accreditation_kpis = st.columns(5)
-        accreditation_values = [
-            ("📚", "Program studi", total_prodi_akreditasi, "Sesuai filter akademik"),
-            ("✅", "Akreditasi aktif", akreditasi_aktif, "Masa berlaku belum berakhir"),
-            ("🏅", "Peringkat Unggul", jumlah_unggul, "Peringkat akreditasi Unggul"),
-            ("⏳", "Berakhir ≤ 1 tahun", segera_berakhir, "Perlu perhatian"),
-            ("⚠️", "Kedaluwarsa", akreditasi_kedaluwarsa, "Masa berlaku berakhir"),
-        ]
-        for column, item in zip(accreditation_kpis, accreditation_values):
-            with column: kpi(item[0], item[1], format_number(item[2]), item[3])
+    accreditation_kpis = st.columns(5)
+    accreditation_values = [
+        ("📚", "Program studi", total_prodi_akreditasi, "Sesuai filter akademik"),
+        ("✅", "Akreditasi aktif", akreditasi_aktif, "Masa berlaku belum berakhir"),
+        ("🏅", "Peringkat Unggul", jumlah_unggul, "Peringkat akreditasi Unggul"),
+        ("⏳", "Berakhir ≤ 1 tahun", segera_berakhir, "Perlu perhatian"),
+        ("⚠️", "Kedaluwarsa", akreditasi_kedaluwarsa, "Masa berlaku berakhir"),
+    ]
+    for column, item in zip(accreditation_kpis, accreditation_values):
+        with column: kpi(item[0], item[1], format_number(item[2]), item[3])
 
-        accreditation_left, accreditation_right = st.columns([1, 1.25])
-        with accreditation_left:
-            rank_summary = akreditasi_filter["peringkat"].fillna("Tidak diketahui").value_counts().rename_axis("Peringkat").reset_index(name="Program Studi")
-            figure = px.pie(rank_summary, names="Peringkat", values="Program Studi", hole=0.56, title="Komposisi Peringkat Akreditasi", color_discrete_sequence=[C["primary"], C["yellow"], C["blue"], C["orange"], C["purple"], C["gray"]])
-            figure.update_layout(height=440, paper_bgcolor="white", legend=dict(orientation="h", y=-0.12))
-            figure.update_traces(textinfo="label+value+percent")
-            st.plotly_chart(figure, use_container_width=True)
+    accreditation_left, accreditation_right = st.columns([1, 1.25])
+    with accreditation_left:
+        rank_summary = akreditasi_filter["peringkat"].fillna("Tidak diketahui").value_counts().rename_axis("Peringkat").reset_index(name="Program Studi")
+        figure = px.pie(rank_summary, names="Peringkat", values="Program Studi", hole=0.56, title="Komposisi Peringkat Akreditasi", color_discrete_sequence=[C["primary"], C["yellow"], C["blue"], C["orange"], C["purple"], C["gray"]])
+        figure.update_layout(height=440, paper_bgcolor="white", legend=dict(orientation="h", y=-0.12))
+        figure.update_traces(textinfo="label+value+percent")
+        st.plotly_chart(figure, use_container_width=True)
 
-        with accreditation_right:
-            faculty_accreditation = akreditasi_filter.groupby(["fakultas", "peringkat"], dropna=False).size().reset_index(name="Program Studi")
-            figure = px.bar(faculty_accreditation, x="fakultas", y="Program Studi", color="peringkat", barmode="stack", title="Peringkat Akreditasi per Fakultas", color_discrete_sequence=[C["primary"], C["yellow"], C["blue"], C["orange"], C["purple"], C["gray"]])
-            figure.update_layout(height=440, paper_bgcolor="white", plot_bgcolor="white", xaxis_title=None, yaxis_title="Program Studi", legend_title_text="Peringkat", margin=dict(l=10, r=10, t=55, b=100))
-            figure.update_xaxes(tickangle=-35)
-            st.plotly_chart(figure, use_container_width=True)
+    with accreditation_right:
+        faculty_accreditation = akreditasi_filter.groupby(["fakultas", "peringkat"], dropna=False).size().reset_index(name="Program Studi")
+        figure = px.bar(faculty_accreditation, x="fakultas", y="Program Studi", color="peringkat", barmode="stack", title="Peringkat Akreditasi per Fakultas", color_discrete_sequence=[C["primary"], C["yellow"], C["blue"], C["orange"], C["purple"], C["gray"]])
+        figure.update_layout(height=440, paper_bgcolor="white", plot_bgcolor="white", xaxis_title=None, yaxis_title="Program Studi", legend_title_text="Peringkat", margin=dict(l=10, r=10, t=55, b=100))
+        figure.update_xaxes(tickangle=-35)
+        st.plotly_chart(figure, use_container_width=True)
 
-        accreditation_table = (
-            akreditasi_filter[["jenjang_normal", "fakultas", "prodi", "peringkat", "no_sk_akreditasi", "tanggal_sk_akreditasi", "masa_mulai_sk_akreditasi", "masa_sk_akhir_akreditasi", "status_akreditasi", "masa_berakhir", "sisa_hari"]]
-            .assign(prioritas_urutan=lambda frame: frame["masa_berakhir"].map({"Sudah berakhir": 1, "Berakhir ≤ 1 tahun": 2, "Normal": 3, "Belum diketahui": 4}).fillna(5))
-            .sort_values(["prioritas_urutan", "masa_sk_akhir_akreditasi", "fakultas", "prodi"], ascending=[True, True, True, True])
-            .drop(columns=["prioritas_urutan"])
-        )
+    accreditation_table = (
+        akreditasi_filter[["jenjang_normal", "fakultas", "prodi", "peringkat", "no_sk_akreditasi", "tanggal_sk_akreditasi", "masa_mulai_sk_akreditasi", "masa_sk_akhir_akreditasi", "status_akreditasi", "masa_berakhir", "sisa_hari"]]
+        .assign(prioritas_urutan=lambda frame: frame["masa_berakhir"].map({"Sudah berakhir": 1, "Berakhir ≤ 1 tahun": 2, "Normal": 3, "Belum diketahui": 4}).fillna(5))
+        .sort_values(["prioritas_urutan", "masa_sk_akhir_akreditasi", "fakultas", "prodi"], ascending=[True, True, True, True])
+        .drop(columns=["prioritas_urutan"])
+    )
 
-        st.markdown("**Daftar dan Masa Berlaku Akreditasi Program Studi** (Tampilan dibatasi 10 baris pertama)")
-        st.dataframe(
-            accreditation_table.head(10), use_container_width=True, hide_index=True,
-            column_config={
-                "jenjang_normal": "Jenjang", "fakultas": "Fakultas", "prodi": "Program Studi", "peringkat": "Peringkat", "no_sk_akreditasi": "Nomor SK",
-                "tanggal_sk_akreditasi": st.column_config.DateColumn("Tanggal SK", format="DD/MM/YYYY"),
-                "masa_mulai_sk_akreditasi": st.column_config.DateColumn("Mulai Berlaku", format="DD/MM/YYYY"),
-                "masa_sk_akhir_akreditasi": st.column_config.DateColumn("Akhir Berlaku", format="DD/MM/YYYY"),
-                "status_akreditasi": "Status Akreditasi", "masa_berakhir": "Status Masa Berlaku",
-                "sisa_hari": st.column_config.NumberColumn("Sisa Hari", format="%d"),
-            },
-        )
+    st.markdown("**Daftar dan Masa Berlaku Akreditasi Program Studi** (Tampilan dibatasi 10 baris pertama)")
+    st.dataframe(
+        accreditation_table.head(10), use_container_width=True, hide_index=True,
+        column_config={
+            "jenjang_normal": "Jenjang", "fakultas": "Fakultas", "prodi": "Program Studi", "peringkat": "Peringkat", "no_sk_akreditasi": "Nomor SK",
+            "tanggal_sk_akreditasi": st.column_config.DateColumn("Tanggal SK", format="DD/MM/YYYY"),
+            "masa_mulai_sk_akreditasi": st.column_config.DateColumn("Mulai Berlaku", format="DD/MM/YYYY"),
+            "masa_sk_akhir_akreditasi": st.column_config.DateColumn("Akhir Berlaku", format="DD/MM/YYYY"),
+            "status_akreditasi": "Status Akreditasi", "masa_berakhir": "Status Masa Berlaku",
+            "sisa_hari": st.column_config.NumberColumn("Sisa Hari", format="%d"),
+        },
+    )
 
 
 # --- 3 S/D 8. DASHBOARD KOSONG ---
