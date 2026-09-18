@@ -24,6 +24,7 @@ FILE_PMB = DATA_DIR / "vs_rekap_pmb.xls"
 FILE_AKREDITASI = DATA_DIR / "akreditasiprodi.xls"
 
 TARGET_IKU = {
+    "IKU-01-01": 1.0,
     "IKU-01-05": 15.0,
     "IKU-01-07": 2.0,
     "IKU-02-01": 1.0,
@@ -379,8 +380,6 @@ faculty_options = sorted(df["fakultas"].dropna().unique().tolist())
 path_options = sorted(set(df["jenis_seleksi"].dropna().astype(str).tolist()) | set(df_pmb["jenis_seleksi"].dropna().astype(str).tolist()))
 province_options = sorted(df["propinsi"].dropna().unique().tolist())
 status_options = sorted(df["status_kategori"].dropna().astype(str).unique().tolist())
-
-# Ambil opsi jenis_sekolah dari dataframe, jika tersedia
 school_options = sorted(df["jenis_sekolah"].dropna().unique().tolist()) if "jenis_sekolah" in df.columns else []
 
 available_iku_years = sorted(set(df["tahun_angkatan"].dropna().astype(int).tolist()) | set(df_yudisium["tahun_lulus"].dropna().astype(int).tolist()), reverse=True)
@@ -538,30 +537,22 @@ with main_tabs[1]:
     total_peminat = float(academic_pmb["peminat"].sum())
     total_lulus = float(academic_pmb["lulus_seleksi"].sum())
     total_daftar = float(academic_pmb["daftar_ulang"].sum())
-
-    previous_pmb_year = academic_pmb_year - 1
-    previous_academic_pmb = df_pmb[df_pmb["tahun"].eq(previous_pmb_year)].copy()
-    if selected_levels: previous_academic_pmb = previous_academic_pmb[previous_academic_pmb["jenjang_normal"].isin(selected_levels)]
-    if selected_faculties: previous_academic_pmb = previous_academic_pmb[previous_academic_pmb["fakultas"].isin(selected_faculties)]
-    if selected_programs: previous_academic_pmb = previous_academic_pmb[previous_academic_pmb["jurusan"].isin(selected_programs)]
-    if selected_paths: previous_academic_pmb = previous_academic_pmb[previous_academic_pmb["jenis_seleksi"].isin(selected_paths)]
-
-    previous_total_daftar = float(previous_academic_pmb["daftar_ulang"].sum())
-    student_growth = growth(total_daftar, previous_total_daftar)
+    
+    # Menghitung Persentase peningkatan mahasiswa pada PTK
+    new_t = int(df["tahun_angkatan"].eq(academic_start_year).sum())
+    new_previous = int(df["tahun_angkatan"].eq(academic_start_year - 1).sum())
+    ptk_growth = growth(new_t, new_previous)
 
     cols = st.columns(5)
     pmb_values = [
-        ("📝", "Peminat", format_number(total_peminat)),
-        ("✅", "Lulus seleksi", format_number(total_lulus)),
-        ("📋", "Daftar ulang", format_number(total_daftar)),
-        ("📈", "Persentase peningkatan mahasiswa pada PTK", format_percent(student_growth)),
-        ("🎯", "Yield rate", format_percent(percentage(total_daftar, total_lulus))),
+        ("📝", "Peminat", format_number(total_peminat), f"PMB {academic_pmb_year}"),
+        ("✅", "Lulus seleksi", format_number(total_lulus), f"PMB {academic_pmb_year}"),
+        ("📋", "Daftar ulang", format_number(total_daftar), f"PMB {academic_pmb_year}"),
+        ("📈", "Peningkatan Maba (PTK)", format_percent(ptk_growth), f"Vs {academic_start_year-1}"),
+        ("🎯", "Yield rate", format_percent(percentage(total_daftar, total_lulus)), f"PMB {academic_pmb_year}"),
     ]
     for column, item in zip(cols, pmb_values):
-        note = f"PMB {academic_pmb_year}"
-        if item[1] == "Persentase peningkatan mahasiswa pada PTK":
-            note = f"Daftar ulang {academic_pmb_year} dibanding {previous_pmb_year}"
-        with column: kpi(item[0], item[1], item[2], note)
+        with column: kpi(item[0], item[1], item[2], item[3])
 
     funnel = go.Figure(go.Funnel(y=["Peminat", "Lulus Seleksi", "Daftar Ulang"], x=[total_peminat, total_lulus, total_daftar], textinfo="value+percent initial"))
     funnel.update_layout(title=f"Funnel PMB {academic_pmb_year}")
@@ -655,13 +646,14 @@ with main_tabs[1]:
     # =========================================================
     subheading("C. Data Asal / Jenis Sekolah")
 
+    cols = st.columns(4)
     if "jenis_sekolah" in academic_df.columns and not academic_df["jenis_sekolah"].eq("Tidak diketahui").all():
         school_data = academic_df[academic_df["jenis_sekolah"] != "Tidak diketahui"]
         
-        cols = st.columns(3)
         with cols[0]: kpi("🏫", "Data Sekolah Terdata", format_number(len(school_data)), "Berdasarkan filter")
         with cols[1]: kpi("📊", "Jenis Sekolah Terbanyak", school_data["jenis_sekolah"].mode()[0] if not school_data.empty else "-", "Kategori Dominan")
-        with cols[2]: kpi("📈", "Jumlah Kategori Sekolah", format_number(school_data["jenis_sekolah"].nunique()), "Variasi Jenis")
+        with cols[2]: kpi("🕌", "Lulusan Pesantren Ditampung", "Belum tersedia", "Data pesantren kosong")
+        with cols[3]: kpi("📈", "Jumlah Kategori Sekolah", format_number(school_data["jenis_sekolah"].nunique()), "Variasi Jenis")
 
         if not school_data.empty:
             school_summary = school_data["jenis_sekolah"].value_counts().rename_axis("Jenis Sekolah").reset_index(name="Jumlah Mahasiswa")
@@ -677,6 +669,11 @@ with main_tabs[1]:
                 st.markdown("<br>**Detail Data Jenis Sekolah** (Tampilan dibatasi 10 baris pertama)", unsafe_allow_html=True)
                 st.dataframe(school_summary.head(10), use_container_width=True, hide_index=True)
     else:
+        with cols[0]: kpi("🏫", "Data Sekolah Terdata", "-", "Data belum tersedia")
+        with cols[1]: kpi("📊", "Jenis Sekolah Terbanyak", "-", "Data belum tersedia")
+        with cols[2]: kpi("🕌", "Lulusan Pesantren Ditampung", "Belum tersedia", "Data pesantren kosong")
+        with cols[3]: kpi("📈", "Jumlah Kategori Sekolah", "-", "Data belum tersedia")
+        
         empty_dashboard("Data Asal / Jenis Sekolah", global_year, "🏫")
         st.info("Catatan: Kolom 'jenis_sekolah' belum ditemukan di sumber data Anda atau isinya kosong. Grafik akan otomatis muncul jika datanya tersedia.")
 
@@ -692,10 +689,16 @@ with main_tabs[1]:
     if selected_programs: filtered_difabel = filtered_difabel[filtered_difabel["jurusan"].isin(selected_programs)]
     if selected_provinces: filtered_difabel = filtered_difabel[filtered_difabel["propinsi"].isin(selected_provinces)]
 
-    cols = st.columns(3)
+    # Menghitung Persentase peningkatan mahasiswa berkebutuhan khusus
+    dif_t = int(df_difabel["tahun_angkatan"].eq(academic_start_year).sum())
+    dif_previous = int(df_difabel["tahun_angkatan"].eq(academic_start_year - 1).sum())
+    dif_growth = growth(dif_t, dif_previous)
+
+    cols = st.columns(4)
     with cols[0]: kpi("♿", "Total mahasiswa", format_number(filtered_difabel["nim"].nunique()), "NIM unik")
-    with cols[1]: kpi("✅", "Status aktif", format_number(filtered_difabel.loc[filtered_difabel["status_normal"].eq("aktif"), "nim"].nunique()), "")
-    with cols[2]: kpi("📚", "Program Studi", format_number(filtered_difabel["jurusan"].nunique()), "")
+    with cols[1]: kpi("📈", "Peningkatan Mhs Kebutuhan Khusus", format_percent(dif_growth), f"Vs Angkatan {academic_start_year-1}")
+    with cols[2]: kpi("✅", "Status aktif", format_number(filtered_difabel.loc[filtered_difabel["status_normal"].eq("aktif"), "nim"].nunique()), "")
+    with cols[3]: kpi("📚", "Program Studi", format_number(filtered_difabel["jurusan"].nunique()), "")
 
     if not filtered_difabel.empty:
         need_df = filtered_difabel["kebutuhan_khusus"].value_counts().rename_axis("Kebutuhan Khusus").reset_index(name="Mahasiswa").sort_values("Mahasiswa")
@@ -713,11 +716,17 @@ with main_tabs[1]:
     subheading("E. Data Mahasiswa Daerah Tertinggal")
 
     disadvantaged = academic_df[academic_df["asal_daerah_tertinggal"]]
+    
+    # Menghitung Persentase mahasiswa baru dari daerah tertinggal
+    new_students_dt = df[df["tahun_angkatan"].eq(academic_start_year)]
+    disadvantaged_count = int(new_students_dt["asal_daerah_tertinggal"].sum())
+    dt_percentage = percentage(disadvantaged_count, len(new_students_dt))
 
-    cols = st.columns(3)
+    cols = st.columns(4)
     with cols[0]: kpi("🗺️", "Mahasiswa daerah tertinggal", format_number(len(disadvantaged)), "")
-    with cols[1]: kpi("🏘️", "Kabupaten teridentifikasi", format_number(disadvantaged["kota_normal"].nunique()), "")
-    with cols[2]: kpi("🌍", "Propinsi", format_number(disadvantaged["propinsi"].nunique()), "")
+    with cols[1]: kpi("📊", "Maba dari Daerah Tertinggal (Persentase)", format_percent(dt_percentage), f"Angkatan {academic_start_year}")
+    with cols[2]: kpi("🏘️", "Kabupaten teridentifikasi", format_number(disadvantaged["kota_normal"].nunique()), "")
+    with cols[3]: kpi("🌍", "Propinsi", format_number(disadvantaged["propinsi"].nunique()), "")
 
     st.markdown("**Detail Mahasiswa Daerah Tertinggal** (Tampilan dibatasi 10 baris pertama)")
     dt_export_cols = [c for c in ["nim", "nama", "fakultas", "jurusan", "tahun_angkatan", "status_kategori", "gender_normal", "kota_normal", "propinsi"] if c in disadvantaged.columns]
@@ -738,17 +747,21 @@ with main_tabs[1]:
     graduate_count = academic_yud["nim"].nunique()
     on_time_count = academic_yud.loc[academic_yud["tepat_waktu_bool"], "nim"].nunique()
     on_time_ipk_count = academic_yud.loc[academic_yud["tepat_waktu_ipk_325"], "nim"].nunique()
+    
+    # Menghitung Persentase mahasiswa lulus tepat waktu dengan IPK ≥ 3,25
+    on_time_ipk_percentage = percentage(on_time_ipk_count, graduate_count)
     on_time_percentage = percentage(on_time_count, graduate_count)
 
-    graduation_cols = st.columns(4)
+    graduation_cols = st.columns(5)
     graduation_values = [
         ("🎓", "Jumlah lulusan", format_number(graduate_count), f"Yudisium {academic_start_year}"),
         ("⏱️", "Lulus tepat waktu", format_number(on_time_count), f"Yudisium {academic_start_year}"),
         ("🏅", "Tepat waktu dan IPK ≥ 3,25", format_number(on_time_ipk_count), f"Yudisium {academic_start_year}"),
-        ("📈", "Kelulusan tepat waktu", format_percent(on_time_percentage), f"Yudisium {academic_start_year}"),
+        ("🌟", "Lulus Tepat Waktu & IPK ≥ 3,25", format_percent(on_time_ipk_percentage), f"Yudisium {academic_start_year}"),
+        ("📈", "Persentase kelulusan tepat waktu", format_percent(on_time_percentage), f"Yudisium {academic_start_year}"),
     ]
     for column, item in zip(graduation_cols, graduation_values):
-        with column: kpi(*item)
+        with column: kpi(item[0], item[1], item[2], item[3])
 
     if academic_yud.empty:
         st.info(f"Data yudisium tahun {academic_start_year} tidak tersedia untuk filter yang dipilih.")
@@ -878,20 +891,10 @@ with main_tabs[9]:
     st.markdown("<br>", unsafe_allow_html=True)
 
     if iku_sub_section == "IKU Akademik":
-        new_students = df[df["tahun_angkatan"].eq(global_year)]
-        disadvantaged_count = int(new_students["asal_daerah_tertinggal"].sum())
-        iku_01_07 = percentage(disadvantaged_count, len(new_students))
-
-        dif_t = int(df_difabel["tahun_angkatan"].eq(global_year).sum())
-        dif_previous = int(df_difabel["tahun_angkatan"].eq(global_year - 1).sum())
-        iku_02_01 = growth(dif_t, dif_previous)
-
+        
         yud_year = df_yudisium[df_yudisium["tahun_lulus"].eq(global_year)]
         graduate_count = yud_year["nim"].nunique()
         on_time_count = yud_year.loc[yud_year["tepat_waktu_bool"], "nim"].nunique()
-        on_time_ipk_count = yud_year.loc[yud_year["tepat_waktu_ipk_325"], "nim"].nunique()
-
-        iku_04_1 = percentage(on_time_ipk_count, graduate_count)
         iku_04_3 = percentage(on_time_count, graduate_count)
 
         pmb_years = sorted(df_pmb["tahun"].dropna().astype(int).unique().tolist())
@@ -906,13 +909,11 @@ with main_tabs[9]:
             st.warning(f"Data PMB tahun {global_year} belum tersedia. IKU-35-54 memakai data PMB terbaru {iku_pmb_year}.")
 
         iku_rows = [
-            ("IKU-01-05", "Persentase lulusan pesantren yang ditampung", None, "Mahasiswa baru lulusan pesantren ÷ total mahasiswa baru × 100%", "Belum tersedia data asal pesantren.", "Belum tersedia"),
-            ("IKU-01-07", "Persentase mahasiswa baru dari daerah tertinggal", iku_01_07, "Mahasiswa baru daerah tertinggal ÷ total mahasiswa baru × 100%", f"{disadvantaged_count} dari {len(new_students)} mahasiswa baru.", "Tersedia"),
-            ("IKU-02-01", "Persentase peningkatan mahasiswa berkebutuhan khusus", iku_02_01, "(Mahasiswa kebutuhan khusus t − t−1) ÷ mahasiswa kebutuhan khusus t−1 × 100%", f"{dif_t} dibanding {dif_previous}.", ("Tersedia" if iku_02_01 is not None else "Sebagian")),
-            ("IKU-04-1", "Persentase mahasiswa lulus tepat waktu dengan IPK ≥ 3,25", iku_04_1, "Lulusan tepat waktu dengan IPK ≥ 3,25 ÷ seluruh lulusan × 100%", f"{on_time_ipk_count} dari {graduate_count} lulusan.", ("Tersedia" if iku_04_1 is not None else "Belum tersedia")),
             ("IKU-04-3", "Persentase kelulusan tepat waktu", iku_04_3, "Lulusan tepat waktu ÷ seluruh lulusan × 100%", f"{on_time_count} dari {graduate_count} lulusan.", ("Tersedia" if iku_04_3 is not None else "Belum tersedia")),
             ("IKU-35-54", "Yield Rate Mahasiswa Baru", iku_35_54, "Daftar ulang ÷ lulus seleksi × 100%", f"PMB {iku_pmb_year}: {format_number(total_daftar)} dari {format_number(total_lulus)}.", ("Tersedia" if iku_35_54 is not None else "Belum tersedia")),
         ]
+
+        st.info("💡 Beberapa indikator IKU Akademik (seperti Peningkatan Mahasiswa PTK, Lulusan Pesantren, Maba Daerah Tertinggal, Mahasiswa Difabel, dan Lulus IPK ≥ 3,25) kini telah dipindahkan dan diintegrasikan langsung ke dalam Tab **Akademik**.")
 
         for start in range(0, len(iku_rows), 3):
             columns = st.columns(3)
