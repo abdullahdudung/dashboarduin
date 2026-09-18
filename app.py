@@ -328,7 +328,7 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame,
     difabel = difabel.drop_duplicates(subset=["nim"], keep="first")
 
     yudisium["tanggal_yudisium_mahasiswa"] = pd.to_datetime(yudisium["tanggal_yudisium_mahasiswa"], errors="coerce")
-    yudisium["tanggal_lulus"] = yudisium["tanggal_lulus"]
+    yudisium["tanggal_lulus"] = yudisium["tanggal_yudisium_mahasiswa"] # DIKEMBALIKAN KE VERSI SEBELUMNYA
     yudisium["tahun_lulus"] = yudisium["tanggal_lulus"].dt.year.astype("Int64")
     yudisium["ipk"] = pd.to_numeric(yudisium["ipk"], errors="coerce")
     yudisium["semester"] = pd.to_numeric(yudisium["semester"], errors="coerce")
