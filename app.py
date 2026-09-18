@@ -328,7 +328,7 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame,
     difabel = difabel.drop_duplicates(subset=["nim"], keep="first")
 
     yudisium["tanggal_yudisium_mahasiswa"] = pd.to_datetime(yudisium["tanggal_yudisium_mahasiswa"], errors="coerce")
-    yudisium["tanggal_lulus"] = yudisium["tanggal_yudisium_mahasiswa"] # DIKEMBALIKAN KE VERSI SEBELUMNYA
+    yudisium["tanggal_lulus"] = yudisium["tanggal_yudisium_mahasiswa"]
     yudisium["tahun_lulus"] = yudisium["tanggal_lulus"].dt.year.astype("Int64")
     yudisium["ipk"] = pd.to_numeric(yudisium["ipk"], errors="coerce")
     yudisium["semester"] = pd.to_numeric(yudisium["semester"], errors="coerce")
@@ -671,7 +671,7 @@ with main_tabs[1]:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    sch_col1, sch_col2 = st.columns([1, 1])
+    sch_col1, _ = st.columns([1, 1])
     
     with sch_col1:
         st.markdown("**Komposisi Jurusan Asal Sekolah (IPA, IPS, dll)**")
@@ -688,25 +688,25 @@ with main_tabs[1]:
             empty_dashboard("Data Jurusan Asal", global_year, "📊")
             st.info("Catatan: Kolom `jurusan_sekolah` belum tersedia di sumber data Anda. Grafik akan otomatis terisi saat data tersedia.")
             
-    with sch_col2:
-        st.markdown("**Statistik Rekap Asal Sekolah**")
-        if "jenis_sekolah" in academic_df.columns and not academic_df["jenis_sekolah"].eq("Tidak diketahui").all():
-            rekap_sekolah = academic_df.groupby("jenis_sekolah").size().reset_index(name="Jumlah Mahasiswa").sort_values("Jumlah Mahasiswa", ascending=False)
-            rekap_sekolah["Persentase"] = (rekap_sekolah["Jumlah Mahasiswa"] / total_mhs_akademik * 100).round(2).astype(str) + "%"
-            
-            st.dataframe(rekap_sekolah.head(10), use_container_width=True, hide_index=True)
-            
-            csv = rekap_sekolah.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 Unduh Data Lengkap Rekap Asal Sekolah (CSV)",
-                data=csv,
-                file_name=f'rekap_jenis_sekolah_{academic_start_year}.csv',
-                mime='text/csv',
-                use_container_width=True
-            )
-        else:
-            empty_dashboard("Tabel Jenis Sekolah", global_year, "📋")
-            st.warning("Data rekap jenis sekolah belum tersedia secara memadai di sumber data.")
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("**Detail Data Rekap Asal Sekolah** (Tampilan dibatasi 10 baris pertama)")
+    if "jenis_sekolah" in academic_df.columns and not academic_df["jenis_sekolah"].eq("Tidak diketahui").all():
+        rekap_sekolah = academic_df.groupby("jenis_sekolah").size().reset_index(name="Jumlah Mahasiswa").sort_values("Jumlah Mahasiswa", ascending=False)
+        rekap_sekolah["Persentase"] = (rekap_sekolah["Jumlah Mahasiswa"] / total_mhs_akademik * 100).round(2).astype(str) + "%"
+        
+        st.dataframe(rekap_sekolah.head(10), use_container_width=True, hide_index=True)
+        
+        csv = rekap_sekolah.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Unduh Data Lengkap Rekap Asal Sekolah (CSV)",
+            data=csv,
+            file_name=f'rekap_jenis_sekolah_{academic_start_year}.csv',
+            mime='text/csv',
+            use_container_width=True
+        )
+    else:
+        empty_dashboard("Tabel Jenis Sekolah", global_year, "📋")
+        st.warning("Data rekap jenis sekolah belum tersedia secara memadai di sumber data.")
 
 
     # =========================================================
