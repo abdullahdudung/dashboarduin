@@ -24,7 +24,6 @@ FILE_PMB = DATA_DIR / "vs_rekap_pmb.xls"
 FILE_AKREDITASI = DATA_DIR / "akreditasiprodi.xls"
 
 TARGET_IKU = {
-    "IKU-01-01": 1.0,
     "IKU-01-05": 15.0,
     "IKU-01-07": 2.0,
     "IKU-02-01": 1.0,
@@ -540,15 +539,29 @@ with main_tabs[1]:
     total_lulus = float(academic_pmb["lulus_seleksi"].sum())
     total_daftar = float(academic_pmb["daftar_ulang"].sum())
 
-    cols = st.columns(4)
+    previous_pmb_year = academic_pmb_year - 1
+    previous_academic_pmb = df_pmb[df_pmb["tahun"].eq(previous_pmb_year)].copy()
+    if selected_levels: previous_academic_pmb = previous_academic_pmb[previous_academic_pmb["jenjang_normal"].isin(selected_levels)]
+    if selected_faculties: previous_academic_pmb = previous_academic_pmb[previous_academic_pmb["fakultas"].isin(selected_faculties)]
+    if selected_programs: previous_academic_pmb = previous_academic_pmb[previous_academic_pmb["jurusan"].isin(selected_programs)]
+    if selected_paths: previous_academic_pmb = previous_academic_pmb[previous_academic_pmb["jenis_seleksi"].isin(selected_paths)]
+
+    previous_total_daftar = float(previous_academic_pmb["daftar_ulang"].sum())
+    student_growth = growth(total_daftar, previous_total_daftar)
+
+    cols = st.columns(5)
     pmb_values = [
         ("📝", "Peminat", format_number(total_peminat)),
         ("✅", "Lulus seleksi", format_number(total_lulus)),
         ("📋", "Daftar ulang", format_number(total_daftar)),
+        ("📈", "Persentase peningkatan mahasiswa pada PTK", format_percent(student_growth)),
         ("🎯", "Yield rate", format_percent(percentage(total_daftar, total_lulus))),
     ]
     for column, item in zip(cols, pmb_values):
-        with column: kpi(item[0], item[1], item[2], f"PMB {academic_pmb_year}")
+        note = f"PMB {academic_pmb_year}"
+        if item[1] == "Persentase peningkatan mahasiswa pada PTK":
+            note = f"Daftar ulang {academic_pmb_year} dibanding {previous_pmb_year}"
+        with column: kpi(item[0], item[1], item[2], note)
 
     funnel = go.Figure(go.Funnel(y=["Peminat", "Lulus Seleksi", "Daftar Ulang"], x=[total_peminat, total_lulus, total_daftar], textinfo="value+percent initial"))
     funnel.update_layout(title=f"Funnel PMB {academic_pmb_year}")
@@ -865,10 +878,6 @@ with main_tabs[9]:
     st.markdown("<br>", unsafe_allow_html=True)
 
     if iku_sub_section == "IKU Akademik":
-        new_t = int(df["tahun_angkatan"].eq(global_year).sum())
-        new_previous = int(df["tahun_angkatan"].eq(global_year - 1).sum())
-        iku_01_01 = growth(new_t, new_previous)
-
         new_students = df[df["tahun_angkatan"].eq(global_year)]
         disadvantaged_count = int(new_students["asal_daerah_tertinggal"].sum())
         iku_01_07 = percentage(disadvantaged_count, len(new_students))
@@ -897,7 +906,6 @@ with main_tabs[9]:
             st.warning(f"Data PMB tahun {global_year} belum tersedia. IKU-35-54 memakai data PMB terbaru {iku_pmb_year}.")
 
         iku_rows = [
-            ("IKU-01-01", "Persentase peningkatan mahasiswa pada PTK", iku_01_01, "(Mahasiswa baru t − mahasiswa baru t−1) ÷ mahasiswa baru t−1 × 100%", f"{new_t} dibanding {new_previous}.", ("Tersedia" if iku_01_01 is not None else "Sebagian")),
             ("IKU-01-05", "Persentase lulusan pesantren yang ditampung", None, "Mahasiswa baru lulusan pesantren ÷ total mahasiswa baru × 100%", "Belum tersedia data asal pesantren.", "Belum tersedia"),
             ("IKU-01-07", "Persentase mahasiswa baru dari daerah tertinggal", iku_01_07, "Mahasiswa baru daerah tertinggal ÷ total mahasiswa baru × 100%", f"{disadvantaged_count} dari {len(new_students)} mahasiswa baru.", "Tersedia"),
             ("IKU-02-01", "Persentase peningkatan mahasiswa berkebutuhan khusus", iku_02_01, "(Mahasiswa kebutuhan khusus t − t−1) ÷ mahasiswa kebutuhan khusus t−1 × 100%", f"{dif_t} dibanding {dif_previous}.", ("Tersedia" if iku_02_01 is not None else "Sebagian")),
