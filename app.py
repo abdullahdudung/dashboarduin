@@ -312,11 +312,13 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame,
     mahasiswa["kota_normal"] = mahasiswa["kota"].apply(normalize_region)
     mahasiswa["asal_daerah_tertinggal"] = mahasiswa["kota_normal"].isin(DAERAH_TERTINGGAL_2025_2029)
     
-    # Inisialisasi kolom jenis sekolah jika tidak ada di sumber aslinya
+    # Inisialisasi kolom jenis sekolah & jurusan sekolah jika tidak ada di sumber aslinya
     if "jenis_sekolah" not in mahasiswa.columns:
         mahasiswa["jenis_sekolah"] = "Tidak diketahui"
+    if "jurusan_sekolah" not in mahasiswa.columns:
+        mahasiswa["jurusan_sekolah"] = "Tidak diketahui"
 
-    for column in ["fakultas", "jurusan", "jenis_seleksi", "propinsi", "kota", "jenis_sekolah"]:
+    for column in ["fakultas", "jurusan", "jenis_seleksi", "propinsi", "kota", "jenis_sekolah", "jurusan_sekolah"]:
         if column in mahasiswa.columns:
             mahasiswa[column] = mahasiswa[column].fillna("Tidak diketahui").astype(str).str.strip()
 
@@ -326,7 +328,7 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame,
     difabel = difabel.drop_duplicates(subset=["nim"], keep="first")
 
     yudisium["tanggal_yudisium_mahasiswa"] = pd.to_datetime(yudisium["tanggal_yudisium_mahasiswa"], errors="coerce")
-    yudisium["tanggal_lulus"] = yudisium["tanggal_yudisium_mahasiswa"]
+    yudisium["tanggal_lulus"] = yudisium["tanggal_lulus"]
     yudisium["tahun_lulus"] = yudisium["tanggal_lulus"].dt.year.astype("Int64")
     yudisium["ipk"] = pd.to_numeric(yudisium["ipk"], errors="coerce")
     yudisium["semester"] = pd.to_numeric(yudisium["semester"], errors="coerce")
@@ -538,7 +540,6 @@ with main_tabs[1]:
     total_lulus = float(academic_pmb["lulus_seleksi"].sum())
     total_daftar = float(academic_pmb["daftar_ulang"].sum())
     
-    # Menghitung Persentase peningkatan mahasiswa pada PTK
     new_t = int(df["tahun_angkatan"].eq(academic_start_year).sum())
     new_previous = int(df["tahun_angkatan"].eq(academic_start_year - 1).sum())
     ptk_growth = growth(new_t, new_previous)
@@ -646,36 +647,66 @@ with main_tabs[1]:
     # =========================================================
     subheading("C. Data Asal / Jenis Sekolah")
 
-    cols = st.columns(4)
-    if "jenis_sekolah" in academic_df.columns and not academic_df["jenis_sekolah"].eq("Tidak diketahui").all():
-        school_data = academic_df[academic_df["jenis_sekolah"] != "Tidak diketahui"]
-        
-        with cols[0]: kpi("🏫", "Data Sekolah Terdata", format_number(len(school_data)), "Berdasarkan filter")
-        with cols[1]: kpi("📊", "Jenis Sekolah Terbanyak", school_data["jenis_sekolah"].mode()[0] if not school_data.empty else "-", "Kategori Dominan")
-        with cols[2]: kpi("🕌", "Lulusan Pesantren Ditampung", "Belum tersedia", "Data pesantren kosong")
-        with cols[3]: kpi("📈", "Jumlah Kategori Sekolah", format_number(school_data["jenis_sekolah"].nunique()), "Variasi Jenis")
+    total_mhs_akademik = len(academic_df)
 
-        if not school_data.empty:
-            school_summary = school_data["jenis_sekolah"].value_counts().rename_axis("Jenis Sekolah").reset_index(name="Jumlah Mahasiswa")
-            
-            sch_col1, sch_col2 = st.columns([1, 1])
-            with sch_col1:
-                figure = px.pie(school_summary, names="Jenis Sekolah", values="Jumlah Mahasiswa", hole=0.58, title="Komposisi Jenis Sekolah", color_discrete_sequence=[C["primary"], C["orange"], C["yellow"], C["blue"], C["gray"]])
-                figure.update_layout(height=430, paper_bgcolor="white", legend=dict(orientation="h", y=-0.15))
-                figure.update_traces(textinfo="label+value+percent")
+    def count_school_regex(pattern):
+        return int(academic_df["jenis_sekolah"].str.contains(pattern, case=False, na=False, regex=True).sum())
+
+    # Menghitung klasifikasi asal sekolah menggunakan regex agar deteksinya lebih pintar
+    count_sma = count_school_regex(r"\bSMA\b|\bSMAN\b|\bSMAS\b|\bSMU\b")
+    count_ma = count_school_regex(r"\bMA\b|\bMAN\b|\bMAS\b")
+    count_smk = count_school_regex(r"\bSMK\b|\bSMKN\b|\bSMKS\b")
+    count_pesantren = count_school_regex(r"pesantren|pondok|\bPP\b")
+    
+    pct_sma = percentage(count_sma, total_mhs_akademik)
+    pct_ma = percentage(count_ma, total_mhs_akademik)
+    pct_smk = percentage(count_smk, total_mhs_akademik)
+    pct_pesantren = percentage(count_pesantren, total_mhs_akademik)
+
+    sch_kpi_cols = st.columns(4)
+    with sch_kpi_cols[0]: kpi("🏫", "Lulusan SMA", format_number(count_sma), f"{format_percent(pct_sma)} dari total populasi filter")
+    with sch_kpi_cols[1]: kpi("🕌", "Lulusan MA", format_number(count_ma), f"{format_percent(pct_ma)} dari total populasi filter")
+    with sch_kpi_cols[2]: kpi("⚙️", "Lulusan SMK", format_number(count_smk), f"{format_percent(pct_smk)} dari total populasi filter")
+    with sch_kpi_cols[3]: kpi("🕋", "Lulusan Pesantren", format_number(count_pesantren), f"{format_percent(pct_pesantren)} (Relevan IKU-01-05)")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    sch_col1, sch_col2 = st.columns([1, 1])
+    
+    with sch_col1:
+        st.markdown("**Komposisi Jurusan Asal Sekolah (IPA, IPS, dll)**")
+        if "jurusan_sekolah" in academic_df.columns and not academic_df["jurusan_sekolah"].eq("Tidak diketahui").all():
+            jurusan_summary = academic_df[academic_df["jurusan_sekolah"] != "Tidak diketahui"]["jurusan_sekolah"].value_counts().rename_axis("Jurusan Asal").reset_index(name="Jumlah Mahasiswa")
+            if not jurusan_summary.empty:
+                figure = px.pie(jurusan_summary, names="Jurusan Asal", values="Jumlah Mahasiswa", hole=0.58, color_discrete_sequence=[C["primary"], C["orange"], C["yellow"], C["blue"], C["gray"]])
+                figure.update_layout(height=400, paper_bgcolor="white", margin=dict(t=20, b=20, l=20, r=20), legend=dict(orientation="h", y=-0.15))
+                figure.update_traces(textinfo="label+percent")
                 st.plotly_chart(figure, use_container_width=True)
+            else:
+                empty_dashboard("Data Jurusan Asal", global_year, "📊")
+        else:
+            empty_dashboard("Data Jurusan Asal", global_year, "📊")
+            st.info("Catatan: Kolom `jurusan_sekolah` belum tersedia di sumber data Anda. Grafik akan otomatis terisi saat data tersedia.")
             
-            with sch_col2:
-                st.markdown("<br>**Detail Data Jenis Sekolah** (Tampilan dibatasi 10 baris pertama)", unsafe_allow_html=True)
-                st.dataframe(school_summary.head(10), use_container_width=True, hide_index=True)
-    else:
-        with cols[0]: kpi("🏫", "Data Sekolah Terdata", "-", "Data belum tersedia")
-        with cols[1]: kpi("📊", "Jenis Sekolah Terbanyak", "-", "Data belum tersedia")
-        with cols[2]: kpi("🕌", "Lulusan Pesantren Ditampung", "Belum tersedia", "Data pesantren kosong")
-        with cols[3]: kpi("📈", "Jumlah Kategori Sekolah", "-", "Data belum tersedia")
-        
-        empty_dashboard("Data Asal / Jenis Sekolah", global_year, "🏫")
-        st.info("Catatan: Kolom 'jenis_sekolah' belum ditemukan di sumber data Anda atau isinya kosong. Grafik akan otomatis muncul jika datanya tersedia.")
+    with sch_col2:
+        st.markdown("**Statistik Rekap Asal Sekolah**")
+        if "jenis_sekolah" in academic_df.columns and not academic_df["jenis_sekolah"].eq("Tidak diketahui").all():
+            rekap_sekolah = academic_df.groupby("jenis_sekolah").size().reset_index(name="Jumlah Mahasiswa").sort_values("Jumlah Mahasiswa", ascending=False)
+            rekap_sekolah["Persentase"] = (rekap_sekolah["Jumlah Mahasiswa"] / total_mhs_akademik * 100).round(2).astype(str) + "%"
+            
+            st.dataframe(rekap_sekolah.head(10), use_container_width=True, hide_index=True)
+            
+            csv = rekap_sekolah.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Unduh Data Lengkap Rekap Asal Sekolah (CSV)",
+                data=csv,
+                file_name=f'rekap_jenis_sekolah_{academic_start_year}.csv',
+                mime='text/csv',
+                use_container_width=True
+            )
+        else:
+            empty_dashboard("Tabel Jenis Sekolah", global_year, "📋")
+            st.warning("Data rekap jenis sekolah belum tersedia secara memadai di sumber data.")
 
 
     # =========================================================
@@ -689,7 +720,6 @@ with main_tabs[1]:
     if selected_programs: filtered_difabel = filtered_difabel[filtered_difabel["jurusan"].isin(selected_programs)]
     if selected_provinces: filtered_difabel = filtered_difabel[filtered_difabel["propinsi"].isin(selected_provinces)]
 
-    # Menghitung Persentase peningkatan mahasiswa berkebutuhan khusus
     dif_t = int(df_difabel["tahun_angkatan"].eq(academic_start_year).sum())
     dif_previous = int(df_difabel["tahun_angkatan"].eq(academic_start_year - 1).sum())
     dif_growth = growth(dif_t, dif_previous)
@@ -717,7 +747,6 @@ with main_tabs[1]:
 
     disadvantaged = academic_df[academic_df["asal_daerah_tertinggal"]]
     
-    # Menghitung Persentase mahasiswa baru dari daerah tertinggal
     new_students_dt = df[df["tahun_angkatan"].eq(academic_start_year)]
     disadvantaged_count = int(new_students_dt["asal_daerah_tertinggal"].sum())
     dt_percentage = percentage(disadvantaged_count, len(new_students_dt))
@@ -748,7 +777,6 @@ with main_tabs[1]:
     on_time_count = academic_yud.loc[academic_yud["tepat_waktu_bool"], "nim"].nunique()
     on_time_ipk_count = academic_yud.loc[academic_yud["tepat_waktu_ipk_325"], "nim"].nunique()
     
-    # Menghitung Persentase mahasiswa lulus tepat waktu dengan IPK ≥ 3,25
     on_time_ipk_percentage = percentage(on_time_ipk_count, graduate_count)
     on_time_percentage = percentage(on_time_count, graduate_count)
 
